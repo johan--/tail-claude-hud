@@ -19,6 +19,11 @@ type RenderContext struct {
 	ContextPercent    int
 	Cwd               string
 
+	// Token fields populated from StdinData.ContextWindow.CurrentUsage.
+	InputTokens   int
+	CacheCreation int
+	CacheRead     int
+
 	// Pointer fields — all may be nil when the corresponding data is unavailable.
 	Transcript *TranscriptData
 	EnvCounts  *EnvCounts

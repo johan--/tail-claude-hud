@@ -38,6 +38,11 @@ func Gather(input *model.StdinData, cfg *config.Config) *model.RenderContext {
 	}
 	if input.ContextWindow != nil {
 		ctx.ContextWindowSize = input.ContextWindow.Size
+		if input.ContextWindow.CurrentUsage != nil {
+			ctx.InputTokens = input.ContextWindow.CurrentUsage.InputTokens
+			ctx.CacheCreation = input.ContextWindow.CurrentUsage.CacheCreationInputTokens
+			ctx.CacheRead = input.ContextWindow.CurrentUsage.CacheReadInputTokens
+		}
 	}
 
 	// Determine which widget names are active across all configured lines.

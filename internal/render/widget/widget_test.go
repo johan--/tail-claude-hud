@@ -88,6 +88,153 @@ func TestContextWidget_EmptyWhenZero(t *testing.T) {
 	}
 }
 
+func TestContextWidget_PercentMode(t *testing.T) {
+	ctx := &model.RenderContext{ContextPercent: 42, ContextWindowSize: 200000}
+	cfg := defaultCfg()
+	cfg.Context.Value = "percent"
+
+	got := Context(ctx, cfg)
+	if !strings.Contains(got, "42%") {
+		t.Errorf("percent mode: expected '42%%' in output, got %q", got)
+	}
+}
+
+func TestContextWidget_PercentModeDefault(t *testing.T) {
+	// Empty Value string should behave like "percent".
+	ctx := &model.RenderContext{ContextPercent: 55, ContextWindowSize: 200000}
+	cfg := defaultCfg()
+	cfg.Context.Value = ""
+
+	got := Context(ctx, cfg)
+	if !strings.Contains(got, "55%") {
+		t.Errorf("empty value mode: expected '55%%' in output, got %q", got)
+	}
+}
+
+func TestContextWidget_TokensMode(t *testing.T) {
+	ctx := &model.RenderContext{
+		ContextPercent:    42,
+		ContextWindowSize: 200000,
+		InputTokens:       80000,
+		CacheCreation:     4000,
+		CacheRead:         0,
+	}
+	cfg := defaultCfg()
+	cfg.Context.Value = "tokens"
+
+	got := Context(ctx, cfg)
+	// used = 80000+4000 = 84000 → "84.0k", total = 200000 → "200k"
+	if !strings.Contains(got, "84.0k") {
+		t.Errorf("tokens mode: expected used '84.0k' in output, got %q", got)
+	}
+	if !strings.Contains(got, "200k") {
+		t.Errorf("tokens mode: expected total '200k' in output, got %q", got)
+	}
+}
+
+func TestContextWidget_RemainingMode(t *testing.T) {
+	ctx := &model.RenderContext{
+		ContextPercent:    42,
+		ContextWindowSize: 200000,
+		InputTokens:       80000,
+		CacheCreation:     4000,
+		CacheRead:         0,
+	}
+	cfg := defaultCfg()
+	cfg.Context.Value = "remaining"
+
+	got := Context(ctx, cfg)
+	// remaining = 200000 - 84000 = 116000 → "116k"
+	if !strings.Contains(got, "116k") {
+		t.Errorf("remaining mode: expected '116k' in output, got %q", got)
+	}
+	if !strings.Contains(got, "left") {
+		t.Errorf("remaining mode: expected 'left' in output, got %q", got)
+	}
+}
+
+func TestContextWidget_BreakdownAppearsAbove85(t *testing.T) {
+	ctx := &model.RenderContext{
+		ContextPercent:    90,
+		ContextWindowSize: 200000,
+		InputTokens:       84000,
+		CacheCreation:     12000,
+		CacheRead:         8000,
+	}
+	cfg := defaultCfg()
+	cfg.Context.ShowBreakdown = true
+
+	got := Context(ctx, cfg)
+	if !strings.Contains(got, "in:") {
+		t.Errorf("breakdown: expected 'in:' in output, got %q", got)
+	}
+	if !strings.Contains(got, "cr:") {
+		t.Errorf("breakdown: expected 'cr:' in output, got %q", got)
+	}
+	if !strings.Contains(got, "rd:") {
+		t.Errorf("breakdown: expected 'rd:' in output, got %q", got)
+	}
+}
+
+func TestContextWidget_BreakdownNotAppearsBelow85(t *testing.T) {
+	ctx := &model.RenderContext{
+		ContextPercent:    80,
+		ContextWindowSize: 200000,
+		InputTokens:       84000,
+		CacheCreation:     12000,
+		CacheRead:         8000,
+	}
+	cfg := defaultCfg()
+	cfg.Context.ShowBreakdown = true
+
+	got := Context(ctx, cfg)
+	if strings.Contains(got, "in:") {
+		t.Errorf("breakdown: expected no breakdown at 80%%, got %q", got)
+	}
+}
+
+func TestContextWidget_BreakdownDisabled(t *testing.T) {
+	ctx := &model.RenderContext{
+		ContextPercent:    90,
+		ContextWindowSize: 200000,
+		InputTokens:       84000,
+		CacheCreation:     12000,
+		CacheRead:         8000,
+	}
+	cfg := defaultCfg()
+	cfg.Context.ShowBreakdown = false
+
+	got := Context(ctx, cfg)
+	if strings.Contains(got, "in:") {
+		t.Errorf("breakdown disabled: expected no breakdown, got %q", got)
+	}
+}
+
+// -- formatTokenCount ---------------------------------------------------------
+
+func TestFormatTokenCount(t *testing.T) {
+	tests := []struct {
+		n    int
+		want string
+	}{
+		{0, "0"},
+		{123, "123"},
+		{999, "999"},
+		{1000, "1.0k"},
+		{12300, "12.3k"},
+		{99999, "100.0k"},
+		{100000, "100k"},
+		{123456, "123k"},
+		{200000, "200k"},
+	}
+	for _, tt := range tests {
+		got := formatTokenCount(tt.n)
+		if got != tt.want {
+			t.Errorf("formatTokenCount(%d) = %q, want %q", tt.n, got, tt.want)
+		}
+	}
+}
+
 func TestDirectoryWidget_SingleSegment(t *testing.T) {
 	ctx := &model.RenderContext{Cwd: "/Users/kyle/Code/my-projects/tail-claude-hud"}
 	cfg := defaultCfg()
