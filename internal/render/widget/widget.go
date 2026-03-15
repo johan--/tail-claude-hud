@@ -24,6 +24,7 @@ var Registry = map[string]RenderFunc{
 	"tools":     Tools,
 	"agents":    Agents,
 	"todos":     Todos,
+	"session":   Session,
 }
 
 // Icons holds the icon strings for a given display mode (nerdfont, unicode, ascii).

@@ -449,3 +449,89 @@ func TestProcessEntry_TaskToolUse_NotInTools(t *testing.T) {
 		t.Errorf("expected 0 tools (Task should only appear in Agents), got %d", len(data.Tools))
 	}
 }
+
+// ---- SessionName extraction -------------------------------------------------
+
+func TestProcessEntry_CustomTitle_SetsSessionName(t *testing.T) {
+	es := NewExtractionState()
+	var e Entry
+	e.Type = "custom-title"
+	e.CustomTitle = "My Session Title"
+	es.ProcessEntry(e)
+
+	data := es.ToTranscriptData()
+	if data.SessionName != "My Session Title" {
+		t.Errorf("expected SessionName=%q, got %q", "My Session Title", data.SessionName)
+	}
+}
+
+func TestProcessEntry_CustomTitle_EmptyValue_NoChange(t *testing.T) {
+	// A custom-title entry with an empty CustomTitle should not set the session name.
+	es := NewExtractionState()
+	var e Entry
+	e.Type = "custom-title"
+	e.CustomTitle = ""
+	es.ProcessEntry(e)
+
+	data := es.ToTranscriptData()
+	if data.SessionName != "" {
+		t.Errorf("expected empty SessionName when CustomTitle is empty, got %q", data.SessionName)
+	}
+}
+
+func TestProcessEntry_Slug_FallbackWhenNoCustomTitle(t *testing.T) {
+	// Slug is used as SessionName only when no custom-title has been seen.
+	es := NewExtractionState()
+	var e Entry
+	e.Type = "summary"
+	e.Slug = "slug-based-name"
+	es.ProcessEntry(e)
+
+	data := es.ToTranscriptData()
+	if data.SessionName != "slug-based-name" {
+		t.Errorf("expected SessionName=%q from slug, got %q", "slug-based-name", data.SessionName)
+	}
+}
+
+func TestProcessEntry_CustomTitle_TakesPriorityOverSlug(t *testing.T) {
+	// custom-title should override a previously-set slug.
+	es := NewExtractionState()
+
+	// First: a slug from an earlier entry.
+	var slugEntry Entry
+	slugEntry.Type = "summary"
+	slugEntry.Slug = "slug-name"
+	es.ProcessEntry(slugEntry)
+
+	// Then: a custom-title entry arrives.
+	var titleEntry Entry
+	titleEntry.Type = "custom-title"
+	titleEntry.CustomTitle = "Proper Title"
+	es.ProcessEntry(titleEntry)
+
+	data := es.ToTranscriptData()
+	if data.SessionName != "Proper Title" {
+		t.Errorf("expected custom-title to override slug, got %q", data.SessionName)
+	}
+}
+
+func TestProcessEntry_Slug_NotOverridenByLaterSlug(t *testing.T) {
+	// Once a slug is set, a later entry with a different slug should not change it
+	// (slug is first-seen wins when no custom-title is present).
+	es := NewExtractionState()
+
+	var e1 Entry
+	e1.Type = "summary"
+	e1.Slug = "first-slug"
+	es.ProcessEntry(e1)
+
+	var e2 Entry
+	e2.Type = "summary"
+	e2.Slug = "second-slug"
+	es.ProcessEntry(e2)
+
+	data := es.ToTranscriptData()
+	if data.SessionName != "first-slug" {
+		t.Errorf("expected first slug to be retained, got %q", data.SessionName)
+	}
+}

@@ -27,10 +27,11 @@ type RenderContext struct {
 
 // TranscriptData holds parsed information from the Claude Code transcript.
 type TranscriptData struct {
-	Path   string
-	Tools  []ToolEntry
-	Agents []AgentEntry
-	Todos  []TodoItem
+	Path        string
+	SessionName string
+	Tools       []ToolEntry
+	Agents      []AgentEntry
+	Todos       []TodoItem
 }
 
 // ToolEntry records a single tool invocation observed in the transcript.

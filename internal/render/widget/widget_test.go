@@ -120,7 +120,7 @@ func TestDirectoryWidget_EmptyCwd(t *testing.T) {
 }
 
 func TestRegistryHasAllWidgets(t *testing.T) {
-	expected := []string{"model", "context", "directory", "git", "env", "duration", "tools", "agents", "todos"}
+	expected := []string{"model", "context", "directory", "git", "env", "duration", "tools", "agents", "todos", "session"}
 	for _, name := range expected {
 		if _, ok := Registry[name]; !ok {
 			t.Errorf("Registry missing widget %q", name)
@@ -136,7 +136,7 @@ func TestTranscriptWidgets_NilTranscriptReturnsEmpty(t *testing.T) {
 	cfg := defaultCfg()
 
 	// All transcript-powered widgets must return "" when Transcript is nil.
-	widgets := []string{"tools", "agents", "todos"}
+	widgets := []string{"tools", "agents", "todos", "session"}
 	for _, name := range widgets {
 		fn := Registry[name]
 		if got := fn(ctx, cfg); got != "" {
@@ -542,5 +542,41 @@ func TestLastNSegments(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("lastNSegments(%q, %d) = %q, want %q", tt.path, tt.n, got, tt.want)
 		}
+	}
+}
+
+// -- Session widget -----------------------------------------------------------
+
+func TestSessionWidget_NilTranscriptReturnsEmpty(t *testing.T) {
+	ctx := &model.RenderContext{Transcript: nil}
+	cfg := defaultCfg()
+
+	if got := Session(ctx, cfg); got != "" {
+		t.Errorf("Session with nil Transcript: expected empty, got %q", got)
+	}
+}
+
+func TestSessionWidget_EmptySessionNameReturnsEmpty(t *testing.T) {
+	ctx := &model.RenderContext{Transcript: &model.TranscriptData{SessionName: ""}}
+	cfg := defaultCfg()
+
+	if got := Session(ctx, cfg); got != "" {
+		t.Errorf("Session with empty SessionName: expected empty, got %q", got)
+	}
+}
+
+func TestSessionWidget_RendersSessionName(t *testing.T) {
+	ctx := &model.RenderContext{Transcript: &model.TranscriptData{SessionName: "my-feature-branch"}}
+	cfg := defaultCfg()
+
+	got := Session(ctx, cfg)
+	if !strings.Contains(got, "my-feature-branch") {
+		t.Errorf("Session: expected 'my-feature-branch' in output, got %q", got)
+	}
+}
+
+func TestSessionWidget_RegisteredInRegistry(t *testing.T) {
+	if _, ok := Registry["session"]; !ok {
+		t.Error("Registry missing 'session' widget")
 	}
 }

@@ -68,6 +68,10 @@ type ExtractionState struct {
 
 	// displayAgents holds the ordered list of agents for rendering (newest last).
 	displayAgents []*internalAgent
+
+	// sessionName holds the display name for the current session. Set from a
+	// custom-title entry when present, otherwise falls back to the slug field.
+	sessionName string
 }
 
 // NewExtractionState returns an initialised, empty ExtractionState.
@@ -83,6 +87,14 @@ func NewExtractionState() *ExtractionState {
 // state accordingly. Unknown entry types and malformed blocks are silently
 // ignored — the caller is responsible for feeding entries in order.
 func (es *ExtractionState) ProcessEntry(e Entry) {
+	// custom-title entries take priority over slug for the session name.
+	if e.Type == "custom-title" && e.CustomTitle != "" {
+		es.sessionName = e.CustomTitle
+	} else if e.Slug != "" && es.sessionName == "" {
+		// slug is a fallback: only set when no custom-title has been seen yet.
+		es.sessionName = e.Slug
+	}
+
 	blocks := ExtractContentBlocks(e)
 	ts := e.ParsedTimestamp()
 	if ts.IsZero() {
@@ -307,9 +319,10 @@ func (es *ExtractionState) ToTranscriptData() *model.TranscriptData {
 	copy(todos, es.Todos)
 
 	return &model.TranscriptData{
-		Tools:  tools,
-		Agents: agents,
-		Todos:  todos,
+		SessionName: es.sessionName,
+		Tools:       tools,
+		Agents:      agents,
+		Todos:       todos,
 	}
 }
 
