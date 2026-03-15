@@ -23,7 +23,6 @@ type RenderContext struct {
 	Transcript *TranscriptData
 	EnvCounts  *EnvCounts
 	Git        *GitStatus
-	Usage      *UsageData
 }
 
 // TranscriptData holds parsed information from the Claude Code transcript.
@@ -68,17 +67,6 @@ type GitStatus struct {
 	Untracked int
 	Modified  int
 	Staged    int
-}
-
-// UsageData holds token usage and context window information for the current session.
-type UsageData struct {
-	ContextWindowSize int
-	ContextPercent    int
-	InputTokens       int
-	CacheCreation     int
-	CacheRead         int
-	ModelID           string
-	ModelDisplayName  string
 }
 
 // StdinData is the raw decoded form of the JSON blob Claude Code pipes to stdin.

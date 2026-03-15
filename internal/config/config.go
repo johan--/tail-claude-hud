@@ -36,10 +36,6 @@ type Config struct {
 		AheadBehind bool `toml:"ahead_behind"`
 		FileStats   bool `toml:"file_stats"`
 	} `toml:"git"`
-	Usage struct {
-		Bar      bool `toml:"bar"`
-		CacheTTL int  `toml:"cache_ttl"`
-	} `toml:"usage"`
 	Style struct {
 		Separator string `toml:"separator"`
 		Icons     string `toml:"icons"`
@@ -47,7 +43,6 @@ type Config struct {
 			Context  string `toml:"context"`
 			Warning  string `toml:"warning"`
 			Critical string `toml:"critical"`
-			Usage    string `toml:"usage"`
 		} `toml:"colors"`
 	} `toml:"style"`
 }
@@ -73,16 +68,12 @@ func defaults() *Config {
 	cfg.Git.AheadBehind = false
 	cfg.Git.FileStats = false
 
-	cfg.Usage.Bar = true
-	cfg.Usage.CacheTTL = 60
-
 	cfg.Style.Separator = " | "
 	cfg.Style.Icons = "nerdfont"
 
 	cfg.Style.Colors.Context = "green"
 	cfg.Style.Colors.Warning = "yellow"
 	cfg.Style.Colors.Critical = "red"
-	cfg.Style.Colors.Usage = "bright-blue"
 
 	return cfg
 }

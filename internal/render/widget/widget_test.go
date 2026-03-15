@@ -120,7 +120,7 @@ func TestDirectoryWidget_EmptyCwd(t *testing.T) {
 }
 
 func TestRegistryHasAllWidgets(t *testing.T) {
-	expected := []string{"model", "context", "directory", "git", "env", "duration", "usage", "tools", "agents", "todos"}
+	expected := []string{"model", "context", "directory", "git", "env", "duration", "tools", "agents", "todos"}
 	for _, name := range expected {
 		if _, ok := Registry[name]; !ok {
 			t.Errorf("Registry missing widget %q", name)
@@ -491,49 +491,6 @@ func TestGitWidget_UsesIconLookup(t *testing.T) {
 	icons := IconsFor("ascii")
 	if !strings.Contains(got, icons.Branch) {
 		t.Errorf("Git(ascii): expected branch icon %q, got %q", icons.Branch, got)
-	}
-}
-
-// -- Usage widget -------------------------------------------------------------
-
-func TestUsageWidget_NilUsageReturnsEmpty(t *testing.T) {
-	ctx := &model.RenderContext{Usage: nil}
-	cfg := defaultCfg()
-
-	if got := Usage(ctx, cfg); got != "" {
-		t.Errorf("Usage with nil Usage: expected empty, got %q", got)
-	}
-}
-
-func TestUsageWidget_ZeroDataReturnsEmpty(t *testing.T) {
-	ctx := &model.RenderContext{Usage: &model.UsageData{ContextPercent: 0, ContextWindowSize: 0}}
-	cfg := defaultCfg()
-
-	if got := Usage(ctx, cfg); got != "" {
-		t.Errorf("Usage with zero data: expected empty, got %q", got)
-	}
-}
-
-func TestUsageWidget_ShowsPercent(t *testing.T) {
-	ctx := &model.RenderContext{Usage: &model.UsageData{ContextPercent: 42, ContextWindowSize: 200000}}
-	cfg := defaultCfg()
-
-	got := Usage(ctx, cfg)
-	if !strings.Contains(got, "42%") {
-		t.Errorf("Usage: expected '42%%' in output, got %q", got)
-	}
-}
-
-func TestUsageWidget_BarContainsBlocks(t *testing.T) {
-	ctx := &model.RenderContext{Usage: &model.UsageData{ContextPercent: 50, ContextWindowSize: 200000}}
-	cfg := defaultCfg()
-
-	got := Usage(ctx, cfg)
-	if !strings.Contains(got, "█") {
-		t.Errorf("Usage bar: expected filled blocks in output, got %q", got)
-	}
-	if !strings.Contains(got, "░") {
-		t.Errorf("Usage bar: expected empty blocks in output, got %q", got)
 	}
 }
 

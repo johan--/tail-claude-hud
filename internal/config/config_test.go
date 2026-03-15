@@ -78,14 +78,6 @@ func TestDefaultsWhenNoFile(t *testing.T) {
 		t.Error("Git.FileStats: want false")
 	}
 
-	// Usage defaults
-	if !cfg.Usage.Bar {
-		t.Error("Usage.Bar: want true")
-	}
-	if cfg.Usage.CacheTTL != 60 {
-		t.Errorf("Usage.CacheTTL: got %d, want 60", cfg.Usage.CacheTTL)
-	}
-
 	// Color defaults
 	if cfg.Style.Colors.Context != "green" {
 		t.Errorf("Colors.Context: got %q, want %q", cfg.Style.Colors.Context, "green")
@@ -95,9 +87,6 @@ func TestDefaultsWhenNoFile(t *testing.T) {
 	}
 	if cfg.Style.Colors.Critical != "red" {
 		t.Errorf("Colors.Critical: got %q, want %q", cfg.Style.Colors.Critical, "red")
-	}
-	if cfg.Style.Colors.Usage != "bright-blue" {
-		t.Errorf("Colors.Usage: got %q, want %q", cfg.Style.Colors.Usage, "bright-blue")
 	}
 }
 
