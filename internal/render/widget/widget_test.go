@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"charm.land/lipgloss/v2"
+
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/config"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/model"
 )
@@ -666,6 +668,150 @@ func TestIconsFor_Modes(t *testing.T) {
 	unk := IconsFor("unknown")
 	if unk.Check != "v" {
 		t.Errorf("unknown mode should fall back to ascii, got Check=%q", unk.Check)
+	}
+}
+
+// -- normalizeModelName -------------------------------------------------------
+
+func TestNormalizeModelName_BedrockFullID(t *testing.T) {
+	// Full Bedrock ID: anthropic prefix + date suffix + version suffix.
+	got := normalizeModelName("anthropic.claude-sonnet-4-20250514-v1:0")
+	want := "Claude Sonnet 4"
+	if got != want {
+		t.Errorf("normalizeModelName(%q) = %q, want %q", "anthropic.claude-sonnet-4-20250514-v1:0", got, want)
+	}
+}
+
+func TestNormalizeModelName_DateSuffixOnly(t *testing.T) {
+	got := normalizeModelName("claude-opus-4-20250601")
+	want := "Claude Opus 4"
+	if got != want {
+		t.Errorf("normalizeModelName(%q) = %q, want %q", "claude-opus-4-20250601", got, want)
+	}
+}
+
+func TestNormalizeModelName_VersionSuffixOnly(t *testing.T) {
+	got := normalizeModelName("claude-haiku-3-5-v2:0")
+	want := "Claude Haiku 3.5"
+	if got != want {
+		t.Errorf("normalizeModelName(%q) = %q, want %q", "claude-haiku-3-5-v2:0", got, want)
+	}
+}
+
+func TestNormalizeModelName_AnthropicPrefixOnly(t *testing.T) {
+	got := normalizeModelName("anthropic.claude-haiku-3-5")
+	want := "Claude Haiku 3.5"
+	if got != want {
+		t.Errorf("normalizeModelName(%q) = %q, want %q", "anthropic.claude-haiku-3-5", got, want)
+	}
+}
+
+func TestNormalizeModelName_AlreadyClean(t *testing.T) {
+	// A clean slug that maps to a known display name.
+	got := normalizeModelName("claude-sonnet-4")
+	want := "Claude Sonnet 4"
+	if got != want {
+		t.Errorf("normalizeModelName(%q) = %q, want %q", "claude-sonnet-4", got, want)
+	}
+}
+
+func TestNormalizeModelName_UnknownSlugPassthrough(t *testing.T) {
+	// Unknown slugs come through as-is (after stripping prefixes/suffixes).
+	got := normalizeModelName("anthropic.claude-future-9-20991231-v5:3")
+	want := "claude-future-9"
+	if got != want {
+		t.Errorf("normalizeModelName(%q) = %q, want %q", "anthropic.claude-future-9-20991231-v5:3", got, want)
+	}
+}
+
+func TestNormalizeModelName_PlainString(t *testing.T) {
+	// A completely unrecognized string is returned unchanged.
+	got := normalizeModelName("gpt-4o")
+	want := "gpt-4o"
+	if got != want {
+		t.Errorf("normalizeModelName(%q) = %q, want %q", "gpt-4o", got, want)
+	}
+}
+
+func TestModelWidget_NormalizesBedrockID(t *testing.T) {
+	// The widget should display the human-readable name, not the raw Bedrock ID.
+	ctx := &model.RenderContext{
+		ModelDisplayName:  "anthropic.claude-sonnet-4-20250514-v1:0",
+		ContextWindowSize: 200000,
+	}
+	cfg := defaultCfg()
+	cfg.Model.ShowContextSize = false
+
+	got := Model(ctx, cfg)
+	if !strings.Contains(got, "Claude Sonnet 4") {
+		t.Errorf("Model widget: expected 'Claude Sonnet 4', got %q", got)
+	}
+	if strings.Contains(got, "anthropic.") {
+		t.Errorf("Model widget: Bedrock prefix should be stripped, got %q", got)
+	}
+}
+
+// -- colorStyle helper --------------------------------------------------------
+
+func TestColorStyle_EmptyStringReturnsFallback(t *testing.T) {
+	fallback := lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+	got := colorStyle("", fallback)
+	// The returned style should equal the fallback (same ANSI output).
+	text := "test"
+	if got.Render(text) != fallback.Render(text) {
+		t.Errorf("colorStyle(\"\", fallback) rendered differently from fallback")
+	}
+}
+
+func TestColorStyle_NonEmptyStringCreatesNewStyle(t *testing.T) {
+	fallback := lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+	override := colorStyle("196", fallback)
+	// The override style must differ from the fallback (different color).
+	text := "test"
+	if override.Render(text) == fallback.Render(text) {
+		t.Errorf("colorStyle(\"196\", fallback) should differ from fallback, both rendered %q", override.Render(text))
+	}
+}
+
+// -- Context color override ---------------------------------------------------
+
+func TestContextWidget_DefaultColorsApplied(t *testing.T) {
+	// When cfg.Style.Colors fields are the defaults ("green"/"yellow"/"red"),
+	// the widget must still render without error.
+	ctx := &model.RenderContext{ContextPercent: 50, ContextWindowSize: 200000}
+	cfg := defaultCfg()
+
+	got := Context(ctx, cfg)
+	if !strings.Contains(got, "50%") {
+		t.Errorf("Context with defaults: expected '50%%', got %q", got)
+	}
+}
+
+func TestContextWidget_ColorOverrideApplied(t *testing.T) {
+	// Setting an explicit hex color override must not break rendering.
+	ctx := &model.RenderContext{ContextPercent: 50, ContextWindowSize: 200000}
+	cfg := defaultCfg()
+	cfg.Style.Colors.Context = "#00ff00"
+	cfg.Style.Colors.Warning = "#ffff00"
+	cfg.Style.Colors.Critical = "#ff0000"
+
+	got := Context(ctx, cfg)
+	if !strings.Contains(got, "50%") {
+		t.Errorf("Context with color overrides: expected '50%%', got %q", got)
+	}
+}
+
+func TestContextWidget_EmptyColorsUseDefaults(t *testing.T) {
+	// Clearing all color fields should fall back to package defaults without panicking.
+	ctx := &model.RenderContext{ContextPercent: 90, ContextWindowSize: 200000}
+	cfg := defaultCfg()
+	cfg.Style.Colors.Context = ""
+	cfg.Style.Colors.Warning = ""
+	cfg.Style.Colors.Critical = ""
+
+	got := Context(ctx, cfg)
+	if !strings.Contains(got, "90%") {
+		t.Errorf("Context with empty colors: expected '90%%', got %q", got)
 	}
 }
 

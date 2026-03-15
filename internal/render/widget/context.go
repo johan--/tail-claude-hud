@@ -17,6 +17,16 @@ var (
 	redStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
 )
 
+// colorStyle returns a lipgloss.Style using the given color string. If colorName
+// is empty, the fallback style is returned unchanged. This lets callers apply
+// config-driven color overrides without breaking the default palette.
+func colorStyle(colorName string, fallback lipgloss.Style) lipgloss.Style {
+	if colorName == "" {
+		return fallback
+	}
+	return lipgloss.NewStyle().Foreground(lipgloss.Color(colorName))
+}
+
 // Context renders a filled/empty progress bar representing context window usage,
 // followed by a value label. The bar color shifts from green to yellow at 70%
 // and from yellow to red at 85%.
@@ -42,12 +52,17 @@ func Context(ctx *model.RenderContext, cfg *config.Config) string {
 
 	pct := ctx.ContextPercent
 
+	// Resolve colors: prefer config overrides, fall back to package-level defaults.
+	contextColor := colorStyle(cfg.Style.Colors.Context, greenStyle)
+	warningColor := colorStyle(cfg.Style.Colors.Warning, yellowStyle)
+	criticalColor := colorStyle(cfg.Style.Colors.Critical, redStyle)
+
 	// Select color based on usage thresholds.
-	colorStyle := greenStyle
+	activeStyle := contextColor
 	if pct >= 85 {
-		colorStyle = redStyle
+		activeStyle = criticalColor
 	} else if pct >= 70 {
-		colorStyle = yellowStyle
+		activeStyle = warningColor
 	}
 
 	filled := (pct * barWidth) / 100
@@ -56,7 +71,7 @@ func Context(ctx *model.RenderContext, cfg *config.Config) string {
 	}
 	empty := barWidth - filled
 
-	bar := colorStyle.Render(strings.Repeat("█", filled)) +
+	bar := activeStyle.Render(strings.Repeat("█", filled)) +
 		dimStyle.Render(strings.Repeat("░", empty))
 
 	// Compute token totals used by both "tokens" and "remaining" modes.
@@ -75,7 +90,7 @@ func Context(ctx *model.RenderContext, cfg *config.Config) string {
 		label = fmt.Sprintf("%d%%", pct)
 	}
 
-	result := bar + " " + colorStyle.Render(label)
+	result := bar + " " + activeStyle.Render(label)
 
 	// Append token breakdown when context is high and breakdown is enabled.
 	if pct > 85 && cfg.Context.ShowBreakdown {
