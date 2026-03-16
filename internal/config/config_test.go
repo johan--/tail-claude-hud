@@ -33,9 +33,9 @@ func TestDefaultsWhenNoFile(t *testing.T) {
 	if len(cfg.Lines) != 3 {
 		t.Fatalf("expected 3 lines, got %d", len(cfg.Lines))
 	}
-	assertWidgets(t, cfg.Lines[0].Widgets, []string{"model", "context", "project", "todos", "duration"})
+	assertWidgets(t, cfg.Lines[0].Widgets, []string{"thinking", "model", "context", "project", "todos", "duration"})
 	assertWidgets(t, cfg.Lines[1].Widgets, []string{"agents"})
-	assertWidgets(t, cfg.Lines[2].Widgets, []string{"thinking", "tools"})
+	assertWidgets(t, cfg.Lines[2].Widgets, []string{"tools"})
 
 	// Spec 4: default Icons
 	if cfg.Style.Icons != "nerdfont" {
@@ -272,8 +272,8 @@ func TestDefaultsNeverReturnsNil(t *testing.T) {
 	}
 }
 
-// TestDefaultLayoutIsThreeLinesHybrid verifies the C+D hybrid layout:
-// Line 1 = identity+health, Line 2 = agents (ephemeral), Line 3 = thinking+tools (ephemeral).
+// TestDefaultLayoutIsThreeLinesHybrid verifies the layout:
+// Line 1 = thinking+identity+health, Line 2 = agents (ephemeral), Line 3 = tools (ephemeral).
 func TestDefaultLayoutIsThreeLinesHybrid(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
@@ -287,9 +287,9 @@ func TestDefaultLayoutIsThreeLinesHybrid(t *testing.T) {
 		t.Fatalf("default layout: want 3 lines, got %d", len(cfg.Lines))
 	}
 
-	assertWidgets(t, cfg.Lines[0].Widgets, []string{"model", "context", "project", "todos", "duration"})
+	assertWidgets(t, cfg.Lines[0].Widgets, []string{"thinking", "model", "context", "project", "todos", "duration"})
 	assertWidgets(t, cfg.Lines[1].Widgets, []string{"agents"})
-	assertWidgets(t, cfg.Lines[2].Widgets, []string{"thinking", "tools"})
+	assertWidgets(t, cfg.Lines[2].Widgets, []string{"tools"})
 }
 
 // TestDefaultEnvWidgetAbsent verifies that "env" is not present in the default layout

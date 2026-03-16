@@ -2,7 +2,6 @@ package widget
 
 import (
 	"fmt"
-	"strings"
 
 	"charm.land/lipgloss/v2"
 
@@ -65,16 +64,7 @@ func Context(ctx *model.RenderContext, cfg *config.Config) string {
 		activeStyle = warningColor
 	}
 
-	filled := (pct * barWidth) / 100
-	if filled > barWidth {
-		filled = barWidth
-	}
-	empty := barWidth - filled
-
-	bar := activeStyle.Render(strings.Repeat("█", filled)) +
-		dimStyle.Render(strings.Repeat("░", empty))
-
-	// Compute token totals used by both "tokens" and "remaining" modes.
+	// Compute token totals used by "tokens" and "remaining" modes.
 	used := ctx.InputTokens + ctx.CacheCreation + ctx.CacheRead
 	total := ctx.ContextWindowSize
 
@@ -90,7 +80,7 @@ func Context(ctx *model.RenderContext, cfg *config.Config) string {
 		label = fmt.Sprintf("%d%%", pct)
 	}
 
-	result := bar + " " + activeStyle.Render(label)
+	result := activeStyle.Render(label)
 
 	// Append token breakdown when context is high and breakdown is enabled.
 	if pct > 85 && cfg.Context.ShowBreakdown {

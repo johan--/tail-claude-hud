@@ -52,9 +52,9 @@ func defaults() *Config {
 	cfg := &Config{}
 
 	cfg.Lines = []Line{
-		{Widgets: []string{"model", "context", "project", "todos", "duration"}},
+		{Widgets: []string{"thinking", "model", "context", "project", "todos", "duration"}},
 		{Widgets: []string{"agents"}},
-		{Widgets: []string{"thinking", "tools"}},
+		{Widgets: []string{"tools"}},
 	}
 
 	cfg.Model.ShowContextSize = true
