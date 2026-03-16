@@ -2168,3 +2168,98 @@ func TestProcessEntry_NonSidechainStillProcessed(t *testing.T) {
 		t.Errorf("expected tool name Write, got %q", data.Tools[0].Name)
 	}
 }
+
+// ---- MessageCount -----------------------------------------------------------
+
+// makeTextEntry builds a minimal Entry with a text content block.
+func makeTextEntry(role, text string) Entry {
+	content := fmt.Appendf(nil, `[{"type":"text","text":%q}]`, text)
+	var e Entry
+	e.Message.Role = role
+	e.Message.Content = content
+	e.Timestamp = "2024-01-01T00:00:00Z"
+	return e
+}
+
+func TestMessageCount_EmptyTranscript(t *testing.T) {
+	es := NewExtractionState()
+	data := es.ToTranscriptData()
+	if data.MessageCount != 0 {
+		t.Errorf("empty transcript: expected MessageCount=0, got %d", data.MessageCount)
+	}
+}
+
+func TestMessageCount_UserAndAssistantCounted(t *testing.T) {
+	es := NewExtractionState()
+	es.ProcessEntry(makeTextEntry("user", "Hello"))
+	es.ProcessEntry(makeTextEntry("assistant", "Hi there"))
+	es.ProcessEntry(makeTextEntry("user", "How are you?"))
+
+	data := es.ToTranscriptData()
+	if data.MessageCount != 3 {
+		t.Errorf("expected MessageCount=3, got %d", data.MessageCount)
+	}
+}
+
+func TestMessageCount_ToolResultExcluded(t *testing.T) {
+	es := NewExtractionState()
+	// A real conversational user message.
+	es.ProcessEntry(makeTextEntry("user", "Please read the file"))
+	// An assistant message with a tool_use block.
+	es.ProcessEntry(makeToolUseEntry("id-tr1", "Read", map[string]interface{}{"file_path": "x.go"}))
+	// A tool_result user message — must NOT be counted.
+	es.ProcessEntry(makeToolResultEntry("id-tr1", false))
+
+	data := es.ToTranscriptData()
+	// user text (1) + assistant tool_use (1) = 2; tool_result = 0
+	if data.MessageCount != 2 {
+		t.Errorf("expected MessageCount=2 (tool_result excluded), got %d", data.MessageCount)
+	}
+}
+
+func TestMessageCount_AssistantToolUseIsCounted(t *testing.T) {
+	// An assistant message that contains only a tool_use block is still a
+	// conversational turn — the model chose to use a tool.
+	es := NewExtractionState()
+	es.ProcessEntry(makeToolUseEntry("id-tu1", "Bash", map[string]interface{}{"command": "ls"}))
+
+	data := es.ToTranscriptData()
+	if data.MessageCount != 1 {
+		t.Errorf("expected MessageCount=1 for assistant tool_use, got %d", data.MessageCount)
+	}
+}
+
+func TestMessageCount_SidechainExcluded(t *testing.T) {
+	es := NewExtractionState()
+	es.ProcessEntry(makeTextEntry("user", "Main message"))
+
+	sc := makeTextEntry("user", "Sidechain message")
+	sc.IsSidechain = true
+	es.ProcessEntry(sc)
+
+	data := es.ToTranscriptData()
+	if data.MessageCount != 1 {
+		t.Errorf("expected MessageCount=1 (sidechain excluded), got %d", data.MessageCount)
+	}
+}
+
+func TestMessageCount_PersistedInSnapshot(t *testing.T) {
+	es := NewExtractionState()
+	es.ProcessEntry(makeTextEntry("user", "Hello"))
+	es.ProcessEntry(makeTextEntry("assistant", "Hi"))
+
+	snap, err := es.MarshalSnapshot()
+	if err != nil {
+		t.Fatalf("MarshalSnapshot: %v", err)
+	}
+
+	es2 := NewExtractionState()
+	if err := es2.UnmarshalSnapshot(snap); err != nil {
+		t.Fatalf("UnmarshalSnapshot: %v", err)
+	}
+
+	data := es2.ToTranscriptData()
+	if data.MessageCount != 2 {
+		t.Errorf("snapshot restore: expected MessageCount=2, got %d", data.MessageCount)
+	}
+}

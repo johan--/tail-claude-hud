@@ -270,7 +270,7 @@ func TestDirectoryWidget_EmptyCwd(t *testing.T) {
 }
 
 func TestRegistryHasAllWidgets(t *testing.T) {
-	expected := []string{"model", "context", "directory", "git", "project", "env", "duration", "tools", "agents", "todos", "session", "thinking", "tokens", "cost", "lines", "outputstyle"}
+	expected := []string{"model", "context", "directory", "git", "project", "env", "duration", "tools", "agents", "todos", "session", "thinking", "tokens", "cost", "lines", "outputstyle", "messages"}
 	for _, name := range expected {
 		if _, ok := Registry[name]; !ok {
 			t.Errorf("Registry missing widget %q", name)
@@ -286,7 +286,7 @@ func TestTranscriptWidgets_NilTranscriptReturnsEmpty(t *testing.T) {
 	cfg := defaultCfg()
 
 	// All transcript-powered widgets must return "" when Transcript is nil.
-	widgets := []string{"tools", "agents", "todos", "session", "thinking"}
+	widgets := []string{"tools", "agents", "todos", "session", "thinking", "messages"}
 	for _, name := range widgets {
 		fn := Registry[name]
 		if got := fn(ctx, cfg); got != "" {

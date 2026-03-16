@@ -96,6 +96,11 @@ type ExtractionState struct {
 	// Persisted in the snapshot so the scrolling ticker position survives
 	// across statusline invocations.
 	dividerOffset int
+
+	// MessageCount is the number of user/assistant conversation turns observed
+	// in the transcript, excluding tool_result entries (which are infrastructure
+	// messages, not conversational turns).
+	MessageCount int
 }
 
 // NewExtractionState returns an initialised, empty ExtractionState.
@@ -135,6 +140,20 @@ func (es *ExtractionState) ProcessEntry(e Entry) {
 
 	blocks := ExtractContentBlocks(e)
 	ts := e.ParsedTimestamp()
+
+	// Count conversational turns: user and assistant messages that are not
+	// pure tool_result responses. Tool results are infrastructure — they carry
+	// tool output back to the model but do not represent a human or model turn.
+	role := e.Message.Role
+	if role == "user" || role == "assistant" {
+		isToolResultOnly := len(blocks.ToolResult) > 0 &&
+			len(blocks.ToolUse) == 0 &&
+			len(blocks.Thinking) == 0 &&
+			!blocks.HasText
+		if !isToolResultOnly {
+			es.MessageCount++
+		}
+	}
 	if ts.IsZero() {
 		ts = time.Now()
 	}
@@ -393,6 +412,7 @@ func (es *ExtractionState) ToTranscriptData() *model.TranscriptData {
 		ThinkingCount:  es.thinkingCount,
 		SpinnerFrame:   es.spinnerFrame,
 		DividerOffset:  es.dividerOffset,
+		MessageCount:   es.MessageCount,
 	}
 }
 
@@ -505,6 +525,7 @@ type extractionSnapshot struct {
 	ThinkingCount  int              `json:"thinking_count"`
 	SpinnerFrame   int              `json:"spinner_frame"`
 	DividerOffset  int              `json:"divider_offset"`
+	MessageCount   int              `json:"message_count"`
 }
 
 type snapshotTool struct {
@@ -577,6 +598,7 @@ func (es *ExtractionState) MarshalSnapshot() (json.RawMessage, error) {
 		ThinkingCount:  es.thinkingCount,
 		SpinnerFrame:   es.spinnerFrame,
 		DividerOffset:  es.dividerOffset,
+		MessageCount:   es.MessageCount,
 	}
 	return json.Marshal(snap)
 }
@@ -655,6 +677,7 @@ func (es *ExtractionState) UnmarshalSnapshot(data json.RawMessage) error {
 	es.thinkingCount = snap.ThinkingCount
 	es.spinnerFrame = snap.SpinnerFrame
 	es.dividerOffset = snap.DividerOffset
+	es.MessageCount = snap.MessageCount
 	return nil
 }
 

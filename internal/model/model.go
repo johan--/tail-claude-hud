@@ -73,6 +73,10 @@ type TranscriptData struct {
 	// (numVisible - 1). This creates a scrolling ticker effect where the
 	// highlighted divider advances with each new tool call and wraps around.
 	DividerOffset int
+
+	// MessageCount is the number of user/assistant conversational turns in the
+	// transcript, excluding pure tool_result entries.
+	MessageCount int
 }
 
 // ToolEntry records a single tool invocation observed in the transcript.
