@@ -196,7 +196,10 @@ func (es *ExtractionState) handleAgentToolUse(b ToolUseBlock, ts time.Time) {
 
 	agentType := input.SubagentType
 	if agentType == "" {
-		agentType = "unknown"
+		agentType = truncateAgentDescription(input.Description)
+	}
+	if agentType == "" {
+		agentType = b.Name // "Agent" or "Task"
 	}
 
 	a := &internalAgent{
@@ -645,6 +648,20 @@ func (es *ExtractionState) UnmarshalSnapshot(data json.RawMessage) error {
 	es.thinkingCount = snap.ThinkingCount
 	es.spinnerFrame = snap.SpinnerFrame
 	return nil
+}
+
+// agentDescriptionMaxLen is the maximum number of runes kept from a description
+// field when it is used as the agent display name.
+const agentDescriptionMaxLen = 30
+
+// truncateAgentDescription returns s truncated to agentDescriptionMaxLen runes
+// with "..." appended when truncation occurs. Returns an empty string unchanged.
+func truncateAgentDescription(s string) string {
+	runes := []rune(s)
+	if len(runes) <= agentDescriptionMaxLen {
+		return s
+	}
+	return string(runes[:agentDescriptionMaxLen]) + "..."
 }
 
 // isNumericString reports whether s is a non-empty string of ASCII digits.

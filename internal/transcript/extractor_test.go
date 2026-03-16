@@ -822,6 +822,73 @@ func TestAgentDuration_ZeroWhenStillRunning(t *testing.T) {
 		t.Errorf("expected DurationMs=0 for running agent, got %d", data.Agents[0].DurationMs)
 	}
 }
+// ---- Agent type fallback (spec: subagent_type empty → description → tool name) ----
+
+// TestAgentType_FallsBackToDescription checks that when subagent_type is empty
+// the description field is used as the display name (truncated if long).
+func TestAgentType_FallsBackToDescription(t *testing.T) {
+	es := NewExtractionState()
+	es.ProcessEntry(makeToolUseEntry("agent-1", "Agent", map[string]interface{}{
+		"description": "Explore the codebase",
+	}))
+
+	data := es.ToTranscriptData()
+	if len(data.Agents) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(data.Agents))
+	}
+	if data.Agents[0].Name != "Explore the codebase" {
+		t.Errorf("expected Name=%q, got %q", "Explore the codebase", data.Agents[0].Name)
+	}
+}
+
+// TestAgentType_TruncatesLongDescription checks that descriptions longer than
+// 30 runes are truncated with "..." appended.
+func TestAgentType_TruncatesLongDescription(t *testing.T) {
+	longDesc := "Read every file in the project and summarize its contents"
+	es := NewExtractionState()
+	es.ProcessEntry(makeToolUseEntry("agent-1", "Agent", map[string]interface{}{
+		"description": longDesc,
+	}))
+
+	data := es.ToTranscriptData()
+	if len(data.Agents) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(data.Agents))
+	}
+	name := data.Agents[0].Name
+	if len([]rune(name)) > 33 { // 30 chars + "..."
+		t.Errorf("expected name length <= 33 runes, got %d: %q", len([]rune(name)), name)
+	}
+	want := "Read every file in the project..."
+	if name != want {
+		t.Errorf("expected Name=%q, got %q", want, name)
+	}
+}
+
+// TestAgentType_FallsBackToToolName checks that when both subagent_type and
+// description are empty the tool name ("Agent" or "Task") is used.
+func TestAgentType_FallsBackToToolName(t *testing.T) {
+	tests := []struct {
+		toolName string
+	}{
+		{"Agent"},
+		{"Task"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.toolName, func(t *testing.T) {
+			es := NewExtractionState()
+			es.ProcessEntry(makeToolUseEntry("agent-1", tc.toolName, map[string]interface{}{}))
+
+			data := es.ToTranscriptData()
+			if len(data.Agents) != 1 {
+				t.Fatalf("expected 1 agent, got %d", len(data.Agents))
+			}
+			if data.Agents[0].Name != tc.toolName {
+				t.Errorf("expected Name=%q, got %q", tc.toolName, data.Agents[0].Name)
+			}
+		})
+	}
+}
+
 // ---- Thinking block detection (specs 5 & 6) --------------------------------
 
 // makeThinkingEntry builds an Entry with a thinking block only (no tool_use, no text).
