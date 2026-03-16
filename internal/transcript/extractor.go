@@ -479,6 +479,7 @@ type extractionSnapshot struct {
 }
 
 type snapshotTool struct {
+	ID         string `json:"id,omitempty"` // tool_use ID; needed to correlate tool_result across invocations
 	Name       string `json:"name"`
 	Target     string `json:"target"`
 	Category   string `json:"category"`
@@ -488,6 +489,7 @@ type snapshotTool struct {
 }
 
 type snapshotAgent struct {
+	ID          string `json:"id,omitempty"` // tool_use ID; needed to correlate tool_result across invocations
 	AgentType   string `json:"agent_type"`
 	Model       string `json:"model"`
 	Description string `json:"description"`
@@ -502,6 +504,7 @@ func (es *ExtractionState) MarshalSnapshot() (json.RawMessage, error) {
 	tools := make([]snapshotTool, 0, len(es.displayTools))
 	for _, t := range es.displayTools {
 		tools = append(tools, snapshotTool{
+			ID:         t.id,
 			Name:       t.name,
 			Target:     t.target,
 			Category:   t.category,
@@ -514,6 +517,7 @@ func (es *ExtractionState) MarshalSnapshot() (json.RawMessage, error) {
 	agents := make([]snapshotAgent, 0, len(es.displayAgents))
 	for _, a := range es.displayAgents {
 		agents = append(agents, snapshotAgent{
+			ID:          a.id,
 			AgentType:   a.agentType,
 			Model:       a.model,
 			Description: a.description,
@@ -551,25 +555,38 @@ func (es *ExtractionState) UnmarshalSnapshot(data json.RawMessage) error {
 
 	es.displayTools = make([]*internalTool, 0, len(snap.Tools))
 	for _, st := range snap.Tools {
-		es.displayTools = append(es.displayTools, &internalTool{
+		t := &internalTool{
+			id:         st.ID,
 			name:       st.Name,
 			target:     st.Target,
 			category:   st.Category,
 			completed:  st.Completed,
 			hasError:   st.HasError,
 			durationMs: st.DurationMs,
-		})
+		}
+		es.displayTools = append(es.displayTools, t)
+		// Rebuild toolMap for non-completed tools so their tool_result can be
+		// matched in the next incremental read.
+		if !t.completed && t.id != "" {
+			es.toolMap[t.id] = t
+		}
 	}
 
 	es.displayAgents = make([]*internalAgent, 0, len(snap.Agents))
 	for _, sa := range snap.Agents {
-		es.displayAgents = append(es.displayAgents, &internalAgent{
+		a := &internalAgent{
+			id:          sa.ID,
 			agentType:   sa.AgentType,
 			model:       sa.Model,
 			description: sa.Description,
 			status:      sa.Status,
 			durationMs:  sa.DurationMs,
-		})
+		}
+		es.displayAgents = append(es.displayAgents, a)
+		// Rebuild agentMap for running agents so their tool_result can complete them.
+		if a.status == "running" && a.id != "" {
+			es.agentMap[a.id] = a
+		}
 	}
 
 	if snap.Todos != nil {
