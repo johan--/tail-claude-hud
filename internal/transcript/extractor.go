@@ -92,10 +92,18 @@ type ExtractionState struct {
 	// It is persisted in the snapshot so successive invocations always advance the frame.
 	spinnerFrame int
 
-	// lastSeenToolCount is the number of tools that were present when MarshalSnapshot
-	// was last called. On the next invocation, fresh tools = len(displayTools) - lastSeenToolCount.
+	// lastSeenToolCount is the tool count restored from the previous snapshot.
+	// On the next invocation, fresh tools = len(displayTools) - lastSeenToolCount.
 	// Persisted in the snapshot so the boundary survives across invocations.
 	lastSeenToolCount int
+
+	// toolCountAtRestore records len(displayTools) immediately after UnmarshalSnapshot
+	// completes. It is NOT persisted — it is a runtime-only anchor that marks where
+	// the old tools end. MarshalSnapshot writes this value as LastSeenToolCount so
+	// the boundary advances to the restore-point rather than the current tool count.
+	// This prevents the separator from resetting on every tick when saves happen
+	// faster than new tools arrive.
+	toolCountAtRestore int
 }
 
 // NewExtractionState returns an initialised, empty ExtractionState.
@@ -576,8 +584,11 @@ func (es *ExtractionState) MarshalSnapshot() (json.RawMessage, error) {
 	todos := make([]model.TodoItem, len(es.Todos))
 	copy(todos, es.Todos)
 
-	// Record the current tool count as the boundary. On the next invocation,
-	// any tools beyond this count are considered "fresh" for the colored separator.
+	// Save toolCountAtRestore (not the current tool count) as the boundary.
+	// This advances the boundary to the restore-point so the next invocation
+	// sees tools added since the previous restore as "fresh". Without this,
+	// every save would reset the boundary to len(displayTools), making freshCount
+	// always 0 or 1 and the colored separator never stable.
 	snap := extractionSnapshot{
 		Tools:             tools,
 		Agents:            agents,
@@ -586,7 +597,7 @@ func (es *ExtractionState) MarshalSnapshot() (json.RawMessage, error) {
 		ThinkingActive:    es.thinkingActive,
 		ThinkingCount:     es.thinkingCount,
 		SpinnerFrame:      es.spinnerFrame,
-		LastSeenToolCount: len(es.displayTools),
+		LastSeenToolCount: es.toolCountAtRestore,
 	}
 	return json.Marshal(snap)
 }
@@ -665,6 +676,9 @@ func (es *ExtractionState) UnmarshalSnapshot(data json.RawMessage) error {
 	es.thinkingCount = snap.ThinkingCount
 	es.spinnerFrame = snap.SpinnerFrame
 	es.lastSeenToolCount = snap.LastSeenToolCount
+	// Anchor the restore-point so MarshalSnapshot advances the boundary
+	// correctly on each save (see toolCountAtRestore comment in the struct).
+	es.toolCountAtRestore = len(es.displayTools)
 	return nil
 }
 
