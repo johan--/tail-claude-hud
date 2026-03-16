@@ -120,7 +120,7 @@ func TestProcessEntry_ToolResult_UnknownID_IsIgnored(t *testing.T) {
 func TestProcessEntry_ToolLimit_KeepsLast20(t *testing.T) {
 	es := NewExtractionState()
 	for i := 0; i < 25; i++ {
-		id := string(rune('a'+i)) // unique IDs: a, b, c, ...
+		id := string(rune('a' + i)) // unique IDs: a, b, c, ...
 		es.ProcessEntry(makeToolUseEntry(id, "Read", map[string]interface{}{"file_path": "f.go"}))
 	}
 

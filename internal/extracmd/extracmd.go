@@ -75,7 +75,8 @@ func parseLabel(raw string) string {
 //
 // Kept:    printable Unicode, ANSI SGR sequences (\x1b[ digits/semicolons m)
 // Stripped: all other bytes < 0x20, DEL (0x7F), and non-color escape sequences
-//           (cursor movement, OSC title sequences, etc.)
+//
+//	(cursor movement, OSC title sequences, etc.)
 func sanitize(s string) string {
 	// Step 1: protect ANSI color escape sequences with unique placeholders so
 	// they survive the subsequent stripping passes.

@@ -21,9 +21,9 @@ type stateFile struct {
 
 // StateManager handles byte-offset tracking for incremental reads.
 type StateManager struct {
-	stateDir   string
-	offset     int64
-	lastPath   string
+	stateDir string
+	offset   int64
+	lastPath string
 }
 
 // NewStateManager creates a manager using the given directory for state files.

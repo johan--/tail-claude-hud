@@ -142,9 +142,9 @@ func BenchmarkRender_FullContext(b *testing.B) {
 			ToolsAllowed: 32,
 		},
 		Git: &model.GitStatus{
-			Branch:  "feat/benchmarks",
-			Dirty:   true,
-			AheadBy: 2,
+			Branch:   "feat/benchmarks",
+			Dirty:    true,
+			AheadBy:  2,
 			BehindBy: 0,
 		},
 	}
@@ -204,10 +204,10 @@ func writeSyntheticTranscript(path string, nLines int) error {
 					"role": "user",
 					"content": []map[string]interface{}{
 						{
-							"type":       "tool_result",
+							"type":        "tool_result",
 							"tool_use_id": toolID,
-							"content":    "output text",
-							"is_error":   false,
+							"content":     "output text",
+							"is_error":    false,
 						},
 					},
 				},
