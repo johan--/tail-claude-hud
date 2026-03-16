@@ -2264,7 +2264,6 @@ func TestMessageCount_PersistedInSnapshot(t *testing.T) {
 	}
 }
 
-
 // ---- Skills extraction -----------------------------------------------------
 
 func TestSkills_NoSkills_EmptySlice(t *testing.T) {

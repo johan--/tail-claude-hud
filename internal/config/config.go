@@ -13,8 +13,11 @@ import (
 
 // Line represents a single rendered row in the statusline.
 // Each widget name maps to a render function in the widget registry.
+// Mode overrides the global style.mode for this specific line.
+// Valid values: "" (inherit global), "plain", "powerline".
 type Line struct {
 	Widgets []string `toml:"widgets"`
+	Mode    string   `toml:"mode"`
 }
 
 // Config holds all HUD settings. Defaults are applied first; the TOML file
@@ -47,7 +50,10 @@ type Config struct {
 		Icons      string `toml:"icons"`
 		ColorLevel string `toml:"color_level"`
 		Theme      string `toml:"theme"`
-		Colors     struct {
+		// Mode controls the rendering style for all lines unless overridden per-line.
+		// Valid values: "plain" (default), "powerline".
+		Mode   string `toml:"mode"`
+		Colors struct {
 			Context  string `toml:"context"`
 			Warning  string `toml:"warning"`
 			Critical string `toml:"critical"`
@@ -111,6 +117,7 @@ func defaults() *Config {
 	cfg.Style.Icons = "nerdfont"
 	cfg.Style.ColorLevel = "auto"
 	cfg.Style.Theme = "default"
+	cfg.Style.Mode = "plain"
 
 	cfg.Style.Colors.Context = "green"
 	cfg.Style.Colors.Warning = "yellow"

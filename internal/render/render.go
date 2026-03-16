@@ -28,6 +28,123 @@ const ansiReset = "\x1b[0m"
 // available space and produce output that is less useful than the raw text.
 const minTruncateWidth = 20
 
+// Powerline characters (Nerd Font private-use area).
+const (
+	// powerlineArrow is U+E0B0 — the right-pointing filled triangle used as a
+	// segment separator when transitioning between adjacent segments.
+	powerlineArrow = "\ue0b0"
+
+	// powerlineStartCap is U+E0B2 — the left-pointing filled triangle rendered
+	// before the first segment as an opening cap.
+	powerlineStartCap = "\ue0b2"
+)
+
+// defaultPowerlineBg is the fallback xterm-256 background color (dark gray)
+// used when a widget does not declare its own BgColor.
+const defaultPowerlineBg = "236"
+
+// ansiSetFg returns the ANSI escape sequence to set the foreground to a
+// xterm-256 color code (e.g. "75"). Returns "" for empty input.
+func ansiSetFg(color string) string {
+	if color == "" {
+		return ""
+	}
+	return "\x1b[38;5;" + color + "m"
+}
+
+// ansiSetBg returns the ANSI escape sequence to set the background to a
+// xterm-256 color code. Returns "" for empty input.
+func ansiSetBg(color string) string {
+	if color == "" {
+		return ""
+	}
+	return "\x1b[48;5;" + color + "m"
+}
+
+// effectiveBg returns r.BgColor when set, otherwise the default powerline bg.
+func effectiveBg(r widget.WidgetResult) string {
+	if r.BgColor != "" {
+		return r.BgColor
+	}
+	return defaultPowerlineBg
+}
+
+// renderPowerline formats a slice of WidgetResults as a powerline-style line:
+//
+//   - Empty results (Text == "") are skipped.
+//   - The first segment is preceded by a start cap (U+E0B2) whose color
+//     matches the first segment's background.
+//   - Adjacent segments are separated by a right-arrow (U+E0B0) whose fg is
+//     the left segment's bg and whose bg is the right segment's bg.
+//   - The last segment is followed by a reset and a closing arrow in the last
+//     segment's background color (so the arrow "ends" the bar).
+//
+// When results is empty the function returns "".
+func renderPowerline(results []widget.WidgetResult) string {
+	// Filter empty segments first.
+	var segs []widget.WidgetResult
+	for _, r := range results {
+		if !r.IsEmpty() {
+			segs = append(segs, r)
+		}
+	}
+	if len(segs) == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+
+	// Start cap: rendered with the first segment's bg as fg, default terminal bg.
+	firstBg := effectiveBg(segs[0])
+	sb.WriteString(ansiReset)
+	sb.WriteString(ansiSetFg(firstBg))
+	sb.WriteString(powerlineStartCap)
+
+	for i, seg := range segs {
+		bg := effectiveBg(seg)
+
+		// Segment content: bg color, then fg color (if any), then padded text.
+		sb.WriteString(ansiSetBg(bg))
+		if seg.FgColor != "" {
+			sb.WriteString(ansiSetFg(seg.FgColor))
+		} else {
+			// No explicit fg; reset fg so it uses the terminal default on this bg.
+			sb.WriteString("\x1b[39m")
+		}
+		sb.WriteString(" ")
+		sb.WriteString(seg.Text)
+		sb.WriteString(" ")
+
+		// Arrow transition (or end cap after the last segment).
+		if i < len(segs)-1 {
+			nextBg := effectiveBg(segs[i+1])
+			// Arrow: fg = current bg, bg = next segment's bg.
+			sb.WriteString(ansiReset)
+			sb.WriteString(ansiSetBg(nextBg))
+			sb.WriteString(ansiSetFg(bg))
+			sb.WriteString(powerlineArrow)
+		} else {
+			// End cap: reset to default bg, fg = last segment's bg.
+			sb.WriteString(ansiReset)
+			sb.WriteString(ansiSetFg(bg))
+			sb.WriteString(powerlineArrow)
+			sb.WriteString(ansiReset)
+		}
+	}
+
+	return sb.String()
+}
+
+// lineMode returns the effective render mode for a line, applying the per-line
+// override when present, otherwise falling back to the global style mode.
+// "powerline" is the only non-default value; anything else (including "") is treated as "plain".
+func lineMode(line config.Line, globalMode string) string {
+	if line.Mode != "" {
+		return line.Mode
+	}
+	return globalMode
+}
+
 // Render walks config lines, looks up widgets in the registry, joins non-empty
 // results with the configured separator, and writes each line to w.
 //
@@ -42,29 +159,49 @@ const minTruncateWidth = 20
 //
 // The caller is expected to populate ctx.TerminalWidth before calling Render
 // (the gather stage does this via terminalWidth() in gather.go).
+//
+// When style.mode is "powerline" (or a line's own mode is "powerline"), the
+// line is rendered with Nerd Font arrow transitions instead of the plain
+// separator. Plain mode is the default.
 func Render(w io.Writer, ctx *model.RenderContext, cfg *config.Config) {
 	sep := cfg.Style.Separator
+	globalMode := cfg.Style.Mode
 
 	for _, line := range cfg.Lines {
-		var parts []string
+		mode := lineMode(line, globalMode)
+
+		var results []widget.WidgetResult
 		for _, name := range line.Widgets {
 			fn, ok := widget.Registry[name]
 			if !ok {
 				logging.Debug("render: unknown widget %q, skipping", name)
 				continue
 			}
-			result := fn(ctx, cfg)
-			if result.IsEmpty() {
-				continue
-			}
-			s := applyWidgetStyle(result, name, cfg)
-			parts = append(parts, s)
-		}
-		if len(parts) == 0 {
-			continue // skip lines where every widget returned empty
+			results = append(results, fn(ctx, cfg))
 		}
 
-		output := strings.Join(parts, sep)
+		var output string
+		if mode == "powerline" {
+			output = renderPowerline(results)
+		} else {
+			// Plain mode: apply widget styles and join with separator.
+			var parts []string
+			for i, r := range results {
+				if r.IsEmpty() {
+					continue
+				}
+				name := line.Widgets[i]
+				parts = append(parts, applyWidgetStyle(r, name, cfg))
+			}
+			if len(parts) == 0 {
+				continue
+			}
+			output = strings.Join(parts, sep)
+		}
+
+		if output == "" {
+			continue
+		}
 
 		if ctx.TerminalWidth >= minTruncateWidth {
 			output = ansi.Truncate(output, ctx.TerminalWidth, truncateSuffix)

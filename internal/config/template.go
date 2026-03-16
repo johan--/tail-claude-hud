@@ -32,6 +32,9 @@ const DefaultTemplate = `# tail-claude-hud configuration
 #   directory — current working directory path
 #   env       — environment variable counts (opt-in)
 #   speed     — rolling tokens/sec average (requires transcript)
+#
+# Each [[line]] can optionally override the global style.mode:
+#   mode = "powerline"  — use powerline arrows for this line only
 [[line]]
 widgets = ["model", "context", "project", "todos", "duration"]
 
@@ -78,7 +81,7 @@ file_stats = false
 
 # Style — controls separators, icons, colour thresholds, and theme.
 [style]
-# String rendered between widgets on each line.
+# String rendered between widgets on each line (used in plain mode).
 separator = " | "
 # Icon set: "nerdfont", "unicode", or "ascii".
 icons = "nerdfont"
@@ -89,6 +92,10 @@ color_level = "auto"
 # The theme sets fg/bg colors for each widget. Use [theme.overrides] to
 # override individual widget colors on top of the selected theme.
 theme = "default"
+# Render mode for all lines: "plain" (default) or "powerline".
+# Powerline uses arrow transitions between segments (requires a Nerd Font terminal).
+# Individual lines can override this with their own mode = "powerline" field.
+mode = "plain"
 
 [style.colors]
 # Colour for normal context usage.

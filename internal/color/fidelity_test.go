@@ -4,7 +4,6 @@ import (
 	"testing"
 )
 
-
 func TestDetectLevel_COLORTERM(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -112,9 +111,9 @@ func TestDetectLevel_Priority(t *testing.T) {
 
 func TestParseLevel(t *testing.T) {
 	tests := []struct {
-		input   string
-		want    Level
-		wantOK  bool
+		input  string
+		want   Level
+		wantOK bool
 	}{
 		{"truecolor", LevelTruecolor, true},
 		{"TRUECOLOR", LevelTruecolor, true},
@@ -148,8 +147,8 @@ func TestLevelFromConfig(t *testing.T) {
 		{"truecolor", LevelTruecolor},
 		{"256", Level256},
 		{"basic", LevelBasic},
-		{"auto", Level256},  // auto → DetectLevel() → Level256 given xterm-256color
-		{"", Level256},      // empty → DetectLevel()
+		{"auto", Level256},    // auto → DetectLevel() → Level256 given xterm-256color
+		{"", Level256},        // empty → DetectLevel()
 		{"garbage", Level256}, // unknown → DetectLevel()
 	}
 
