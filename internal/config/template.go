@@ -58,6 +58,10 @@ show_breakdown = true
 [directory]
 # Number of path components to display (e.g. 1 shows only the last segment).
 levels = 1
+# How to display the path: "full" (default), "fish" (abbreviate intermediate
+# segments to first character: ~/Code/my-projects/tail → ~/C/m/tail),
+# or "basename" (last segment only, ignores levels).
+style = "full"
 
 # Git widget — shows repository state. Also controls project widget's git data.
 [git]

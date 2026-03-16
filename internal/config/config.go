@@ -29,7 +29,8 @@ type Config struct {
 		ShowBreakdown bool   `toml:"show_breakdown"`
 	} `toml:"context"`
 	Directory struct {
-		Levels int `toml:"levels"`
+		Levels int    `toml:"levels"`
+		Style  string `toml:"style"`
 	} `toml:"directory"`
 	Git struct {
 		Dirty       bool `toml:"dirty"`
@@ -64,6 +65,7 @@ func defaults() *Config {
 	cfg.Context.ShowBreakdown = true
 
 	cfg.Directory.Levels = 1
+	cfg.Directory.Style = "full"
 
 	cfg.Git.Dirty = true
 	cfg.Git.AheadBehind = true

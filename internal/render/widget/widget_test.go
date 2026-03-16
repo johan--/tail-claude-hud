@@ -1,6 +1,7 @@
 package widget
 
 import (
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -1160,6 +1161,124 @@ func TestContextWidget_EmptyColorsUseDefaults(t *testing.T) {
 	got := Context(ctx, cfg)
 	if !strings.Contains(got, "90%") {
 		t.Errorf("Context with empty colors: expected '90%%', got %q", got)
+	}
+}
+
+// -- Directory widget: style modes --------------------------------------------
+
+func TestDirectoryWidget_StyleFull(t *testing.T) {
+	ctx := &model.RenderContext{Cwd: "/Users/kyle/Code/my-projects/tail-claude-hud"}
+	cfg := defaultCfg()
+	cfg.Directory.Style = "full"
+	cfg.Directory.Levels = 3
+
+	got := Directory(ctx, cfg)
+	if !strings.Contains(got, "Code/my-projects/tail-claude-hud") {
+		t.Errorf("full style: expected last 3 segments, got %q", got)
+	}
+}
+
+func TestDirectoryWidget_StyleFish(t *testing.T) {
+	// Fish style abbreviates intermediate segments to first char.
+	// Home dir (/Users/kyle) is replaced with ~ first, so the path becomes
+	// ~/Code/my-projects/tail-claude-hud, then fish gives ~/C/m/tail-claude-hud.
+	ctx := &model.RenderContext{Cwd: "/Users/kyle/Code/my-projects/tail-claude-hud"}
+	cfg := defaultCfg()
+	cfg.Directory.Style = "fish"
+
+	got := Directory(ctx, cfg)
+	if !strings.Contains(got, "tail-claude-hud") {
+		t.Errorf("fish style: expected last segment 'tail-claude-hud' intact, got %q", got)
+	}
+	// Intermediate segments must be single characters.
+	if strings.Contains(got, "Code") {
+		t.Errorf("fish style: 'Code' should be abbreviated to 'C', got %q", got)
+	}
+	if strings.Contains(got, "my-projects") {
+		t.Errorf("fish style: 'my-projects' should be abbreviated to 'm', got %q", got)
+	}
+	if !strings.Contains(got, "~/C/m/tail-claude-hud") {
+		t.Errorf("fish style: expected '~/C/m/tail-claude-hud', got %q", got)
+	}
+}
+
+func TestDirectoryWidget_StyleBasename(t *testing.T) {
+	ctx := &model.RenderContext{Cwd: "/Users/kyle/Code/my-projects/tail-claude-hud"}
+	cfg := defaultCfg()
+	cfg.Directory.Style = "basename"
+
+	got := Directory(ctx, cfg)
+	if !strings.Contains(got, "tail-claude-hud") {
+		t.Errorf("basename style: expected 'tail-claude-hud', got %q", got)
+	}
+	if strings.Contains(got, "my-projects") {
+		t.Errorf("basename style: should not contain parent segments, got %q", got)
+	}
+}
+
+func TestDirectoryWidget_HomeSubstitution(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("cannot determine home directory")
+	}
+	ctx := &model.RenderContext{Cwd: home + "/Code/project"}
+	cfg := defaultCfg()
+	cfg.Directory.Style = "full"
+	cfg.Directory.Levels = 5 // show everything
+
+	got := Directory(ctx, cfg)
+	// The tilde must appear; the raw home path must not.
+	if !strings.Contains(got, "~") {
+		t.Errorf("home substitution: expected '~' in output, got %q", got)
+	}
+	if strings.Contains(got, home) {
+		t.Errorf("home substitution: raw home path should be replaced with '~', got %q", got)
+	}
+}
+
+func TestDirectoryWidget_RootPath(t *testing.T) {
+	ctx := &model.RenderContext{Cwd: "/"}
+	cfg := defaultCfg()
+	cfg.Directory.Style = "full"
+
+	// Root renders as empty string from lastNSegments (no segments after split).
+	got := Directory(ctx, cfg)
+	// Should not panic and should produce something renderable (possibly empty text).
+	_ = got
+}
+
+func TestDirectoryWidget_FishRootAbsolutePath(t *testing.T) {
+	// Paths that don't start with ~ keep the leading empty segment as "/" after join.
+	ctx := &model.RenderContext{Cwd: "/usr/local/bin"}
+	cfg := defaultCfg()
+	cfg.Directory.Style = "fish"
+
+	got := Directory(ctx, cfg)
+	if !strings.Contains(got, "bin") {
+		t.Errorf("fish absolute: expected last segment 'bin' intact, got %q", got)
+	}
+	// Intermediate segments should be abbreviated.
+	if strings.Contains(got, "local") {
+		t.Errorf("fish absolute: 'local' should be abbreviated, got %q", got)
+	}
+}
+
+func TestAbbreviateFish(t *testing.T) {
+	tests := []struct {
+		path string
+		want string
+	}{
+		{"~/Code/my-projects/tail-claude-hud", "~/C/m/tail-claude-hud"},
+		{"/usr/local/bin", "/u/l/bin"},
+		{"/single", "/single"},
+		{"~/project", "~/project"},
+		{"~/alpha/beta/gamma/deep", "~/a/b/g/deep"},
+	}
+	for _, tt := range tests {
+		got := abbreviateFish(tt.path)
+		if got != tt.want {
+			t.Errorf("abbreviateFish(%q) = %q, want %q", tt.path, got, tt.want)
+		}
 	}
 }
 

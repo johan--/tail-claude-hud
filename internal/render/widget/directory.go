@@ -1,6 +1,8 @@
 package widget
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -11,21 +13,81 @@ import (
 
 var dirStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("141")).Bold(true)
 
-// Directory renders the last N path segments from ctx.Cwd, where N is
-// cfg.Directory.Levels (defaulting to 1). Uses magenta bold styling.
+// Directory renders the current working directory from ctx.Cwd using the
+// style configured in cfg.Directory.Style:
+//
+//   - "full"     — last N segments (cfg.Directory.Levels), default
+//   - "fish"     — all segments except the last abbreviated to first char
+//   - "basename" — last segment only, ignores cfg.Directory.Levels
+//
+// The home directory is always substituted with "~" before applying the style.
 // Returns "" when ctx.Cwd is empty.
 func Directory(ctx *model.RenderContext, cfg *config.Config) string {
 	if ctx.Cwd == "" {
 		return ""
 	}
 
-	levels := cfg.Directory.Levels
-	if levels <= 0 {
-		levels = 1
+	path := substituteHome(ctx.Cwd)
+
+	style := cfg.Directory.Style
+	if style == "" {
+		style = "full"
 	}
 
-	segments := lastNSegments(ctx.Cwd, levels)
-	return dirStyle.Render(segments)
+	var display string
+	switch style {
+	case "fish":
+		display = abbreviateFish(path)
+	case "basename":
+		display = filepath.Base(path)
+	default: // "full" or unrecognized
+		levels := cfg.Directory.Levels
+		if levels <= 0 {
+			levels = 1
+		}
+		display = lastNSegments(path, levels)
+	}
+
+	return dirStyle.Render(display)
+}
+
+// substituteHome replaces the user's home directory prefix with "~".
+// If the home directory cannot be determined, the path is returned unchanged.
+func substituteHome(path string) string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return path
+	}
+	// Ensure we only match a full path segment, not a prefix of a directory name.
+	prefix := strings.TrimRight(home, "/")
+	if path == prefix {
+		return "~"
+	}
+	if strings.HasPrefix(path, prefix+"/") {
+		return "~" + path[len(prefix):]
+	}
+	return path
+}
+
+// abbreviateFish abbreviates all path segments except the last to their first
+// character, mirroring fish shell's prompt_pwd behaviour. The "~" segment and
+// any empty leading segment (from an absolute path) are left intact.
+//
+// Examples:
+//
+//	~/Code/my-projects/tail-claude-hud → ~/C/m/tail-claude-hud
+//	/usr/local/bin                      → /u/l/bin
+func abbreviateFish(path string) string {
+	parts := strings.Split(path, "/")
+	for i := 0; i < len(parts)-1; i++ {
+		if parts[i] == "~" || parts[i] == "" {
+			continue
+		}
+		if len(parts[i]) > 0 {
+			parts[i] = string([]rune(parts[i])[:1])
+		}
+	}
+	return strings.Join(parts, "/")
 }
 
 // lastNSegments returns the last n path segments from a slash-delimited path,
