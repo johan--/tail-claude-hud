@@ -95,7 +95,6 @@ func modelFamilySuffix(model string) string {
 	return " (" + family + ")"
 }
 
-
 // formatDurationMs formats a millisecond duration as a compact human-readable string:
 //   - <1000ms  → "0.Xs"
 //   - 1–60s    → "Xs"
@@ -113,4 +112,3 @@ func formatDurationMs(ms int) string {
 	secs := seconds % 60
 	return fmt.Sprintf("%dm%ds", minutes, secs)
 }
-

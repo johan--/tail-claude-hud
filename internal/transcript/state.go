@@ -22,11 +22,11 @@ type stateFile struct {
 
 // StateManager handles byte-offset tracking for incremental reads.
 type StateManager struct {
-	stateDir         string
-	offset           int64
-	lastPath         string
-	snapshot         json.RawMessage // set by SetSnapshot; included in next SaveState
-	loadedSnapshot   json.RawMessage // loaded from disk by loadState; returned by LoadSnapshot
+	stateDir       string
+	offset         int64
+	lastPath       string
+	snapshot       json.RawMessage // set by SetSnapshot; included in next SaveState
+	loadedSnapshot json.RawMessage // loaded from disk by loadState; returned by LoadSnapshot
 }
 
 // NewStateManager creates a manager using the given directory for state files.
