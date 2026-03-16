@@ -15,21 +15,22 @@ type RenderFunc func(ctx *model.RenderContext, cfg *config.Config) string
 
 // Registry maps widget names to their render functions.
 var Registry = map[string]RenderFunc{
-	"model":     Model,
-	"context":   Context,
-	"directory": Directory,
-	"git":       Git,
-	"project":   Project,
-	"env":       Env,
-	"duration":  Duration,
-	"tools":     Tools,
-	"agents":    Agents,
-	"todos":     Todos,
-	"session":   Session,
-	"thinking":  Thinking,
-	"tokens":    Tokens,
-	"cost":      Cost,
-	"lines":     Lines,
+	"model":       Model,
+	"context":     Context,
+	"directory":   Directory,
+	"git":         Git,
+	"project":     Project,
+	"env":         Env,
+	"duration":    Duration,
+	"tools":       Tools,
+	"agents":      Agents,
+	"todos":       Todos,
+	"session":     Session,
+	"thinking":    Thinking,
+	"tokens":      Tokens,
+	"cost":        Cost,
+	"lines":       Lines,
+	"outputstyle": OutputStyle,
 }
 
 // Icons holds the icon strings for a given display mode (nerdfont, unicode, ascii).

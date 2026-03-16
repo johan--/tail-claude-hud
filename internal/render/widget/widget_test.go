@@ -270,7 +270,7 @@ func TestDirectoryWidget_EmptyCwd(t *testing.T) {
 }
 
 func TestRegistryHasAllWidgets(t *testing.T) {
-	expected := []string{"model", "context", "directory", "git", "project", "env", "duration", "tools", "agents", "todos", "session", "thinking", "tokens", "cost", "lines"}
+	expected := []string{"model", "context", "directory", "git", "project", "env", "duration", "tools", "agents", "todos", "session", "thinking", "tokens", "cost", "lines", "outputstyle"}
 	for _, name := range expected {
 		if _, ok := Registry[name]; !ok {
 			t.Errorf("Registry missing widget %q", name)
