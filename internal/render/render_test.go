@@ -211,7 +211,39 @@ func TestRender_UsesSeparator(t *testing.T) {
 	Render(&buf, ctx, cfg)
 
 	out := buf.String()
-	if !strings.Contains(out, " :: ") {
-		t.Errorf("expected ' :: ' separator in output, got %q", out)
+	// Spaces are replaced with NBSP in final output, so the separator
+	// " :: " becomes "\u00a0::\u00a0".
+	nbspSep := strings.ReplaceAll(" :: ", " ", "\u00a0")
+	if !strings.Contains(out, nbspSep) {
+		t.Errorf("expected NBSP separator %q in output, got %q", nbspSep, out)
+	}
+}
+
+func TestRender_ReplacesSpacesWithNBSP(t *testing.T) {
+	// VS Code's integrated terminal trims trailing spaces from lines, which
+	// collapses padded statusline content. All regular spaces in the final
+	// output are replaced with non-breaking spaces (U+00A0) to prevent this.
+	ctx := &model.RenderContext{
+		ModelDisplayName:  "Sonnet",
+		ContextWindowSize: 200000,
+		ContextPercent:    50,
+	}
+	cfg := config.LoadHud()
+	cfg.Style.Separator = " | "
+	cfg.Lines = []config.Line{
+		{Widgets: []string{"model", "context"}},
+	}
+
+	var buf bytes.Buffer
+	Render(&buf, ctx, cfg)
+
+	out := buf.String()
+	// No regular space must appear in any output line.
+	if strings.Contains(out, " ") {
+		t.Errorf("expected no regular spaces in output (should be NBSP), got %q", out)
+	}
+	// Non-breaking spaces must be present (the separator has spaces).
+	if !strings.Contains(out, "\u00a0") {
+		t.Errorf("expected NBSP (U+00A0) in output, got %q", out)
 	}
 }

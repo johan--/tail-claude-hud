@@ -66,8 +66,12 @@ func Render(w io.Writer, ctx *model.RenderContext, cfg *config.Config) {
 			output = ansi.Truncate(output, ctx.TerminalWidth, truncateSuffix)
 		}
 
-		// Prepend reset before any space-protection so our colors override
-		// Claude Code's dim styling that bleeds into plugin output.
-		fmt.Fprintln(w, ansiReset+output)
+		// Prepend reset so our colors override Claude Code's dim styling.
+		// Then replace spaces with non-breaking spaces (U+00A0) to prevent
+		// VS Code's integrated terminal from trimming trailing whitespace.
+		// ANSI escape sequences do not contain spaces, so this replacement
+		// is safe to apply to the full line including escape codes.
+		outLine := strings.ReplaceAll(ansiReset+output, " ", "\u00a0")
+		fmt.Fprintln(w, outLine)
 	}
 }
