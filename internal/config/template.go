@@ -13,12 +13,32 @@ const DefaultTemplate = `# tail-claude-hud configuration
 
 # Status line layout — each [[line]] entry is a rendered row of widgets.
 # Widgets are rendered left-to-right in the order listed.
-# Available widgets: model, context, directory, env, duration, tools, git, usage
+#
+# Default layout (C+D hybrid):
+#   Line 1 (identity + health): model, context, project, todos, duration
+#   Line 2 (per-agent activity): agents          — ephemeral, hides when empty
+#   Line 3 (thinking + tools):  thinking, tools  — ephemeral, hides when empty
+#
+# All available widgets:
+#   model     — active Claude model name
+#   context   — token usage progress bar
+#   project   — project name with optional git ahead/behind count
+#   todos     — count of active TodoWrite todos
+#   duration  — elapsed session time
+#   agents    — per-agent activity feed (requires transcript)
+#   thinking  — current thinking block excerpt (requires transcript)
+#   tools     — recent tool use feed (requires transcript)
+#   git       — full repository state (dirty, ahead/behind, file stats)
+#   directory — current working directory path
+#   env       — environment variable counts (opt-in)
 [[line]]
-widgets = ["model", "context", "directory", "env", "duration"]
+widgets = ["model", "context", "project", "todos", "duration"]
 
 [[line]]
-widgets = ["tools"]
+widgets = ["agents"]
+
+[[line]]
+widgets = ["thinking", "tools"]
 
 # Model widget — shows the active Claude model name.
 [model]
@@ -39,12 +59,13 @@ show_breakdown = true
 # Number of path components to display (e.g. 1 shows only the last segment).
 levels = 1
 
-# Git widget — shows repository state.
+# Git widget — shows repository state. Also controls project widget's git data.
 [git]
 # Show a dirty indicator when there are uncommitted changes.
 dirty = true
 # Show ahead/behind counts relative to the upstream branch.
-ahead_behind = false
+# Enabled by default so the project widget can display ahead/behind counts.
+ahead_behind = true
 # Show per-file change statistics.
 file_stats = false
 

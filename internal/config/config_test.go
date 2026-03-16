@@ -29,12 +29,13 @@ func TestDefaultsWhenNoFile(t *testing.T) {
 		t.Fatal("LoadHud returned nil")
 	}
 
-	// Spec 1: two default lines
-	if len(cfg.Lines) != 2 {
-		t.Fatalf("expected 2 lines, got %d", len(cfg.Lines))
+	// Spec 1: three default lines with C+D hybrid layout
+	if len(cfg.Lines) != 3 {
+		t.Fatalf("expected 3 lines, got %d", len(cfg.Lines))
 	}
-	assertWidgets(t, cfg.Lines[0].Widgets, []string{"model", "context", "directory", "env", "duration"})
-	assertWidgets(t, cfg.Lines[1].Widgets, []string{"tools"})
+	assertWidgets(t, cfg.Lines[0].Widgets, []string{"model", "context", "project", "todos", "duration"})
+	assertWidgets(t, cfg.Lines[1].Widgets, []string{"agents"})
+	assertWidgets(t, cfg.Lines[2].Widgets, []string{"thinking", "tools"})
 
 	// Spec 4: default Icons
 	if cfg.Style.Icons != "nerdfont" {
@@ -71,8 +72,8 @@ func TestDefaultsWhenNoFile(t *testing.T) {
 	if !cfg.Git.Dirty {
 		t.Error("Git.Dirty: want true")
 	}
-	if cfg.Git.AheadBehind {
-		t.Error("Git.AheadBehind: want false")
+	if !cfg.Git.AheadBehind {
+		t.Error("Git.AheadBehind: want true (project widget needs ahead/behind data)")
 	}
 	if cfg.Git.FileStats {
 		t.Error("Git.FileStats: want false")
@@ -255,8 +256,8 @@ func TestInvalidTOMLFallsBackToDefaults(t *testing.T) {
 	if cfg.Style.Icons != "nerdfont" {
 		t.Errorf("Icons: got %q, want default %q", cfg.Style.Icons, "nerdfont")
 	}
-	if len(cfg.Lines) != 2 {
-		t.Errorf("Lines: got %d, want default 2", len(cfg.Lines))
+	if len(cfg.Lines) != 3 {
+		t.Errorf("Lines: got %d, want default 3", len(cfg.Lines))
 	}
 }
 
@@ -268,6 +269,46 @@ func TestDefaultsNeverReturnsNil(t *testing.T) {
 
 	if cfg := LoadHud(); cfg == nil {
 		t.Error("LoadHud returned nil")
+	}
+}
+
+// TestDefaultLayoutIsThreeLinesHybrid verifies the C+D hybrid layout:
+// Line 1 = identity+health, Line 2 = agents (ephemeral), Line 3 = thinking+tools (ephemeral).
+func TestDefaultLayoutIsThreeLinesHybrid(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+
+	cfg := LoadHud()
+	if cfg == nil {
+		t.Fatal("LoadHud returned nil")
+	}
+
+	if len(cfg.Lines) != 3 {
+		t.Fatalf("default layout: want 3 lines, got %d", len(cfg.Lines))
+	}
+
+	assertWidgets(t, cfg.Lines[0].Widgets, []string{"model", "context", "project", "todos", "duration"})
+	assertWidgets(t, cfg.Lines[1].Widgets, []string{"agents"})
+	assertWidgets(t, cfg.Lines[2].Widgets, []string{"thinking", "tools"})
+}
+
+// TestDefaultEnvWidgetAbsent verifies that "env" is not present in the default layout
+// (it remains available as an opt-in widget but is not shown by default).
+func TestDefaultEnvWidgetAbsent(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+
+	cfg := LoadHud()
+	if cfg == nil {
+		t.Fatal("LoadHud returned nil")
+	}
+
+	for i, line := range cfg.Lines {
+		for _, w := range line.Widgets {
+			if w == "env" {
+				t.Errorf("default layout line %d contains 'env' widget; it should be opt-in only", i+1)
+			}
+		}
 	}
 }
 

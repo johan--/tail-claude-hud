@@ -52,8 +52,9 @@ func defaults() *Config {
 	cfg := &Config{}
 
 	cfg.Lines = []Line{
-		{Widgets: []string{"model", "context", "directory", "env", "duration"}},
-		{Widgets: []string{"tools"}},
+		{Widgets: []string{"model", "context", "project", "todos", "duration"}},
+		{Widgets: []string{"agents"}},
+		{Widgets: []string{"thinking", "tools"}},
 	}
 
 	cfg.Model.ShowContextSize = true
@@ -65,7 +66,7 @@ func defaults() *Config {
 	cfg.Directory.Levels = 1
 
 	cfg.Git.Dirty = true
-	cfg.Git.AheadBehind = false
+	cfg.Git.AheadBehind = true
 	cfg.Git.FileStats = false
 
 	cfg.Style.Separator = " | "

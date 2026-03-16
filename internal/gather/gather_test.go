@@ -248,6 +248,7 @@ func TestNeedsTranscript(t *testing.T) {
 		{"tools active", []string{"tools"}, true},
 		{"agents active", []string{"agents"}, true},
 		{"todos active", []string{"todos"}, true},
+		{"thinking active", []string{"thinking"}, true},
 		{"none active", []string{"model", "git", "env"}, false},
 		{"empty", []string{}, false},
 	}
@@ -262,6 +263,62 @@ func TestNeedsTranscript(t *testing.T) {
 				t.Errorf("needsTranscript(%v): got %v, want %v", tc.widgets, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestNeedsTranscript_ThinkingWidget(t *testing.T) {
+	// "thinking" must be recognised as a transcript-backed widget.
+	active := map[string]bool{"thinking": true}
+	if !needsTranscript(active) {
+		t.Error("needsTranscript: want true when 'thinking' widget is active")
+	}
+}
+
+func TestGather_TranscriptSpawnedForThinkingWidget(t *testing.T) {
+	// Ensure the transcript goroutine runs when the "thinking" widget is active.
+	dir := t.TempDir()
+	transcriptPath := filepath.Join(dir, "session.jsonl")
+
+	entry := map[string]interface{}{
+		"type":      "assistant",
+		"uuid":      "test-uuid-thinking",
+		"timestamp": "2024-01-15T10:00:00Z",
+		"message": map[string]interface{}{
+			"role":    "assistant",
+			"content": "hello",
+		},
+	}
+	line, _ := json.Marshal(entry)
+	if err := os.WriteFile(transcriptPath, append(line, '\n'), 0o644); err != nil {
+		t.Fatalf("write transcript: %v", err)
+	}
+
+	input := minimalInput()
+	input.TranscriptPath = transcriptPath
+	cfg := cfgWithWidgets("thinking")
+
+	ctx := Gather(input, cfg)
+
+	if ctx.Transcript == nil {
+		t.Fatal("expected Transcript non-nil when thinking widget active and path set")
+	}
+}
+
+func TestGather_GitSpawnedForProjectWidget(t *testing.T) {
+	// When "project" is active but "git" is not, the git goroutine should
+	// still be spawned so the project widget has ahead/behind data available.
+	// We can only observe this indirectly: Git field must be non-nil when
+	// the cwd is inside a real git repository.
+	input := minimalInput()
+	// Use a real directory that is inside a git repo so git.GetStatus returns data.
+	input.Cwd = "/Users/kyle/Code/my-projects/tail-claude-hud/.claude/worktrees/agent-a1526a8d"
+	cfg := cfgWithWidgets("project") // "git" widget NOT listed
+
+	ctx := Gather(input, cfg)
+
+	// git.GetStatus was called — ctx.Git must be non-nil.
+	if ctx.Git == nil {
+		t.Error("expected Git non-nil when project widget is active, got nil")
 	}
 }
 

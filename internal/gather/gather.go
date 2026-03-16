@@ -18,9 +18,10 @@ import (
 
 // transcriptWidgets are the widget names that require transcript data.
 var transcriptWidgets = map[string]bool{
-	"tools":  true,
-	"agents": true,
-	"todos":  true,
+	"tools":    true,
+	"agents":   true,
+	"todos":    true,
+	"thinking": true,
 }
 
 // Gather builds a RenderContext by collecting data in parallel for each data
@@ -69,8 +70,10 @@ func Gather(input *model.StdinData, cfg *config.Config) *model.RenderContext {
 		}()
 	}
 
-	// Git goroutine: needed when the "git" widget is active.
-	if active["git"] {
+	// Git goroutine: needed when the "git" or "project" widget is active.
+	// "project" renders the project name with optional ahead/behind counts,
+	// so it requires the same git data as the "git" widget.
+	if active["git"] || active["project"] {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
