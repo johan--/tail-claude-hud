@@ -82,6 +82,9 @@ file_stats = false
 separator = " | "
 # Icon set: "nerdfont", "unicode", or "ascii".
 icons = "nerdfont"
+# Color depth: "auto" detects from the environment (COLORTERM, TERM_PROGRAM, TERM).
+# Override with "truecolor", "256", or "basic" to force a specific level.
+color_level = "auto"
 
 [style.colors]
 # Colour for normal context usage.

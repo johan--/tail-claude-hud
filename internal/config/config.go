@@ -42,9 +42,10 @@ type Config struct {
 		FileStats   bool `toml:"file_stats"`
 	} `toml:"git"`
 	Style struct {
-		Separator string `toml:"separator"`
-		Icons     string `toml:"icons"`
-		Colors    struct {
+		Separator  string `toml:"separator"`
+		Icons      string `toml:"icons"`
+		ColorLevel string `toml:"color_level"`
+		Colors     struct {
 			Context  string `toml:"context"`
 			Warning  string `toml:"warning"`
 			Critical string `toml:"critical"`
@@ -94,6 +95,7 @@ func defaults() *Config {
 
 	cfg.Style.Separator = " | "
 	cfg.Style.Icons = "nerdfont"
+	cfg.Style.ColorLevel = "auto"
 
 	cfg.Style.Colors.Context = "green"
 	cfg.Style.Colors.Warning = "yellow"
