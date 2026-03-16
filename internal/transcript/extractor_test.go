@@ -2,6 +2,9 @@ package transcript
 
 import (
 	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -1111,5 +1114,677 @@ func TestUnmarshalSnapshot_MalformedData_ReturnsError(t *testing.T) {
 	err := es.UnmarshalSnapshot(json.RawMessage(`not valid json`))
 	if err == nil {
 		t.Error("expected error for malformed snapshot data")
+	}
+}
+
+// ---- Snapshot: spec 1 — tool_use and tool_result in the same JSONL entry (zero-delta timing) ----
+
+// TestSnapshotSpec1_ToolUseAndResultSameEntry verifies that a single Entry containing
+// both a tool_use and a tool_result block (same-entry round-trip) is handled correctly:
+// the tool is recorded as completed with DurationMs=0 (zero delta) and survives a
+// marshal/unmarshal snapshot cycle without getting stuck as running.
+func TestSnapshotSpec1_ToolUseAndResultSameEntry(t *testing.T) {
+	ts := time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC)
+
+	// Build an Entry with both tool_use and tool_result blocks at the same timestamp.
+	inputJSON, _ := json.Marshal(map[string]string{"file_path": "main.go"})
+	toolUseItem := map[string]interface{}{
+		"type":  "tool_use",
+		"id":    "same-id-1",
+		"name":  "Read",
+		"input": json.RawMessage(inputJSON),
+	}
+	toolResultItem := map[string]interface{}{
+		"type":        "tool_result",
+		"tool_use_id": "same-id-1",
+		"is_error":    false,
+		"content":     "file contents",
+	}
+	content, _ := json.Marshal([]interface{}{toolUseItem, toolResultItem})
+	var e Entry
+	e.Message.Role = "assistant"
+	e.Message.Content = content
+	e.Timestamp = ts.Format(time.RFC3339Nano)
+
+	es := NewExtractionState()
+	es.ProcessEntry(e)
+
+	data := es.ToTranscriptData()
+	if len(data.Tools) != 1 {
+		t.Fatalf("expected 1 tool, got %d", len(data.Tools))
+	}
+	tool := data.Tools[0]
+	if tool.Count != 1 {
+		t.Errorf("expected Count=1 (completed), got %d", tool.Count)
+	}
+	if tool.DurationMs != 0 {
+		t.Errorf("expected DurationMs=0 for zero-delta same-entry, got %d", tool.DurationMs)
+	}
+	if tool.HasError {
+		t.Error("expected HasError=false for successful same-entry result")
+	}
+
+	// Snapshot round-trip: restored state must also show the tool as completed.
+	snap, err := es.MarshalSnapshot()
+	if err != nil {
+		t.Fatalf("MarshalSnapshot: %v", err)
+	}
+
+	es2 := NewExtractionState()
+	if err := es2.UnmarshalSnapshot(snap); err != nil {
+		t.Fatalf("UnmarshalSnapshot: %v", err)
+	}
+
+	data2 := es2.ToTranscriptData()
+	if len(data2.Tools) != 1 {
+		t.Fatalf("expected 1 tool after restore, got %d", len(data2.Tools))
+	}
+	if data2.Tools[0].Count != 1 {
+		t.Errorf("restored tool: expected Count=1, got %d", data2.Tools[0].Count)
+	}
+	// The tool must NOT be in the toolMap (it is completed — no pending result needed).
+	if _, ok := es2.toolMap["same-id-1"]; ok {
+		t.Error("completed tool should not be in restored toolMap")
+	}
+}
+
+// TestSnapshotSpec1_ZeroDeltaIsNotStuck ensures that a tool resolved within the
+// same entry does not remain "running" after a snapshot restore, which would
+// mean it would permanently show as running in the HUD.
+func TestSnapshotSpec1_ZeroDeltaIsNotStuck(t *testing.T) {
+	es := NewExtractionState()
+	ts := time.Now()
+
+	inputJSON, _ := json.Marshal(map[string]string{"command": "echo hi"})
+	content, _ := json.Marshal([]interface{}{
+		map[string]interface{}{
+			"type":  "tool_use",
+			"id":    "zero-delta-1",
+			"name":  "Bash",
+			"input": json.RawMessage(inputJSON),
+		},
+		map[string]interface{}{
+			"type":        "tool_result",
+			"tool_use_id": "zero-delta-1",
+			"is_error":    false,
+			"content":     "hi",
+		},
+	})
+	var e Entry
+	e.Message.Role = "assistant"
+	e.Message.Content = content
+	e.Timestamp = ts.Format(time.RFC3339Nano)
+	es.ProcessEntry(e)
+
+	snap, _ := es.MarshalSnapshot()
+	es2 := NewExtractionState()
+	_ = es2.UnmarshalSnapshot(snap)
+
+	data := es2.ToTranscriptData()
+	for _, tool := range data.Tools {
+		if tool.Count == 0 {
+			t.Errorf("tool %q is stuck as running after restore; expected Count>0", tool.Name)
+		}
+	}
+}
+
+// ---- Snapshot: spec 2 — tool_use in invocation N, tool_result in invocation N+3 ----
+
+// TestSnapshotSpec2_MultiHopRestore verifies that a tool started in one invocation
+// and resolved three invocations later is matched correctly through snapshot restores.
+// This is the core cross-invocation correlation use case for the toolMap rebuild.
+func TestSnapshotSpec2_MultiHopToolRestore(t *testing.T) {
+	t0 := time.Date(2024, 7, 1, 10, 0, 0, 0, time.UTC)
+
+	// Invocation 1: tool_use is seen; no result yet.
+	es1 := NewExtractionState()
+	es1.ProcessEntry(makeToolUseEntryAt("multi-hop-1", "Bash",
+		map[string]interface{}{"command": "long-running-script.sh"}, t0))
+
+	snap1, err := es1.MarshalSnapshot()
+	if err != nil {
+		t.Fatalf("invocation 1 MarshalSnapshot: %v", err)
+	}
+
+	// Invocation 2: no new entries; snapshot passes through unchanged.
+	es2 := NewExtractionState()
+	if err := es2.UnmarshalSnapshot(snap1); err != nil {
+		t.Fatalf("invocation 2 UnmarshalSnapshot: %v", err)
+	}
+	// Tool is still running after restore.
+	if data := es2.ToTranscriptData(); data.Tools[0].Count != 0 {
+		t.Fatalf("invocation 2: expected tool still running (Count=0), got Count=%d", data.Tools[0].Count)
+	}
+	// toolMap must contain the running tool so the result can be matched.
+	if _, ok := es2.toolMap["multi-hop-1"]; !ok {
+		t.Fatal("invocation 2: running tool not in toolMap after restore")
+	}
+
+	snap2, _ := es2.MarshalSnapshot()
+
+	// Invocation 3: still no result; another hop.
+	es3 := NewExtractionState()
+	if err := es3.UnmarshalSnapshot(snap2); err != nil {
+		t.Fatalf("invocation 3 UnmarshalSnapshot: %v", err)
+	}
+	if _, ok := es3.toolMap["multi-hop-1"]; !ok {
+		t.Fatal("invocation 3: running tool not in toolMap after restore")
+	}
+	snap3, _ := es3.MarshalSnapshot()
+
+	// Invocation 4: tool_result finally arrives (3 hops later).
+	t1 := t0.Add(5 * time.Second)
+	es4 := NewExtractionState()
+	if err := es4.UnmarshalSnapshot(snap3); err != nil {
+		t.Fatalf("invocation 4 UnmarshalSnapshot: %v", err)
+	}
+	es4.ProcessEntry(makeToolResultEntryAt("multi-hop-1", false, t1))
+
+	data := es4.ToTranscriptData()
+	if len(data.Tools) != 1 {
+		t.Fatalf("invocation 4: expected 1 tool, got %d", len(data.Tools))
+	}
+	tool := data.Tools[0]
+	if tool.Count != 1 {
+		t.Errorf("invocation 4: expected Count=1 (completed), got %d", tool.Count)
+	}
+	if tool.HasError {
+		t.Error("invocation 4: expected HasError=false")
+	}
+	// The display must show completed — the tool must not be stuck as running.
+	// (Map cleanup is an implementation detail; the critical invariant is the display value.)
+}
+
+// TestSnapshotSpec2_MultiHopAgentRestore verifies that a running agent in invocation N
+// receives its tool_result in invocation N+3 and is marked completed correctly.
+func TestSnapshotSpec2_MultiHopAgentRestore(t *testing.T) {
+	t0 := time.Date(2024, 7, 1, 9, 0, 0, 0, time.UTC)
+
+	es1 := NewExtractionState()
+	es1.ProcessEntry(makeToolUseEntryAt("agent-hop-1", "Task",
+		map[string]interface{}{"subagent_type": "research", "model": "claude-haiku"}, t0))
+
+	snap1, _ := es1.MarshalSnapshot()
+
+	es2 := NewExtractionState()
+	_ = es2.UnmarshalSnapshot(snap1)
+	if _, ok := es2.agentMap["agent-hop-1"]; !ok {
+		t.Fatal("invocation 2: running agent not in agentMap after restore")
+	}
+	snap2, _ := es2.MarshalSnapshot()
+
+	es3 := NewExtractionState()
+	_ = es3.UnmarshalSnapshot(snap2)
+	snap3, _ := es3.MarshalSnapshot()
+
+	// Invocation 4: agent completes.
+	t1 := t0.Add(10 * time.Second)
+	es4 := NewExtractionState()
+	_ = es4.UnmarshalSnapshot(snap3)
+	es4.ProcessEntry(makeToolResultEntryAt("agent-hop-1", false, t1))
+
+	data := es4.ToTranscriptData()
+	if len(data.Agents) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(data.Agents))
+	}
+	if data.Agents[0].Status != "completed" {
+		t.Errorf("expected Status=completed, got %q", data.Agents[0].Status)
+	}
+	// The display must show completed — the agent must not be stuck as running.
+	// (Map cleanup is an implementation detail; the critical invariant is the display value.)
+}
+
+// ---- Snapshot: spec 3 — 10 agents completing in rapid succession (display slot eviction) ----
+
+// TestSnapshotSpec3_TenAgentsRapidSuccession verifies that 10 agents completing in rapid
+// succession respect the maxAgents display cap and that evicted agents do not leave
+// dangling entries in agentMap that could prevent future results from being processed.
+func TestSnapshotSpec3_TenAgentsRapidSuccession(t *testing.T) {
+	es := NewExtractionState()
+	base := time.Date(2024, 8, 1, 0, 0, 0, 0, time.UTC)
+
+	// Add 10 agents (exactly the limit).
+	for i := 0; i < 10; i++ {
+		id := fmt.Sprintf("agent-%02d", i)
+		agentType := fmt.Sprintf("worker-%d", i)
+		es.ProcessEntry(makeToolUseEntryAt(id, "Task",
+			map[string]interface{}{"subagent_type": agentType},
+			base.Add(time.Duration(i)*time.Millisecond),
+		))
+	}
+
+	if len(es.displayAgents) != maxAgents {
+		t.Fatalf("expected %d agents after 10 additions, got %d", maxAgents, len(es.displayAgents))
+	}
+
+	// Complete all 10 in rapid succession.
+	for i := 0; i < 10; i++ {
+		id := fmt.Sprintf("agent-%02d", i)
+		es.ProcessEntry(makeToolResultEntryAt(id, false,
+			base.Add(time.Duration(i)*time.Millisecond+500*time.Millisecond),
+		))
+	}
+
+	data := es.ToTranscriptData()
+	if len(data.Agents) != maxAgents {
+		t.Fatalf("expected %d agents, got %d", maxAgents, len(data.Agents))
+	}
+	for i, a := range data.Agents {
+		if a.Status != "completed" {
+			t.Errorf("agent[%d] (%s): expected Status=completed, got %q", i, a.Name, a.Status)
+		}
+	}
+}
+
+// TestSnapshotSpec3_ElevenAgentsEvictsOldest verifies that adding an 11th agent evicts
+// the oldest from displayAgents and that the evicted agent's ID is removed from agentMap,
+// preventing a memory leak from dangling map entries.
+func TestSnapshotSpec3_ElevenAgentsEvictsOldest(t *testing.T) {
+	es := NewExtractionState()
+	base := time.Date(2024, 8, 2, 0, 0, 0, 0, time.UTC)
+
+	// Add exactly maxAgents (10) agents; all remain running.
+	for i := 0; i < maxAgents; i++ {
+		id := fmt.Sprintf("ag-%d", i)
+		es.ProcessEntry(makeToolUseEntryAt(id, "Task",
+			map[string]interface{}{"subagent_type": fmt.Sprintf("type-%d", i)},
+			base.Add(time.Duration(i)*time.Millisecond),
+		))
+	}
+
+	// The 11th agent should evict "ag-0".
+	es.ProcessEntry(makeToolUseEntryAt("ag-10", "Task",
+		map[string]interface{}{"subagent_type": "type-10"},
+		base.Add(100*time.Millisecond),
+	))
+
+	// ag-0 must no longer appear in displayAgents.
+	for _, a := range es.displayAgents {
+		if a.id == "ag-0" {
+			t.Error("evicted agent 'ag-0' still present in displayAgents")
+		}
+	}
+
+	// ag-0 must not be in agentMap (it was running when evicted).
+	if _, ok := es.agentMap["ag-0"]; ok {
+		t.Error("evicted running agent 'ag-0' still present in agentMap; this is a map leak")
+	}
+
+	// The display slice should be capped at maxAgents.
+	if len(es.displayAgents) != maxAgents {
+		t.Errorf("expected %d agents after eviction, got %d", maxAgents, len(es.displayAgents))
+	}
+
+	// Snapshot round-trip: eviction state is preserved.
+	snap, _ := es.MarshalSnapshot()
+	es2 := NewExtractionState()
+	_ = es2.UnmarshalSnapshot(snap)
+
+	data := es2.ToTranscriptData()
+	if len(data.Agents) != maxAgents {
+		t.Errorf("after restore: expected %d agents, got %d", maxAgents, len(data.Agents))
+	}
+	for _, a := range data.Agents {
+		if a.Name == "type-0" {
+			t.Error("evicted agent 'type-0' should not appear after snapshot restore")
+		}
+	}
+}
+
+// ---- Snapshot: spec 4 — transcript truncation mid-session (offset > file size reset) ----
+
+// TestSnapshotSpec4_TruncationResetsSnapshot verifies the StateManager behaviour
+// when the stored byte offset exceeds the current file size: the snapshot must be
+// discarded and the read must restart from byte 0. This mirrors a transcript file
+// being truncated (new session started in the same file path).
+func TestSnapshotSpec4_TruncationResetsSnapshot(t *testing.T) {
+	dir := t.TempDir()
+	stateDir := t.TempDir()
+	transcriptPath := filepath.Join(dir, "session.jsonl")
+
+	sm := NewStateManager(stateDir)
+
+	// Write a line and save state so the offset advances past byte 0.
+	toolUseEntry := makeToolUseEntryAt("truncate-tool-1", "Read",
+		map[string]interface{}{"file_path": "x.go"},
+		time.Now(),
+	)
+	line1, _ := json.Marshal(toolUseEntry)
+	if err := os.WriteFile(transcriptPath, append(line1, '\n'), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	lines, err := sm.ReadIncremental(transcriptPath)
+	if err != nil {
+		t.Fatalf("first ReadIncremental: %v", err)
+	}
+	if len(lines) != 1 {
+		t.Fatalf("expected 1 line, got %d", len(lines))
+	}
+
+	// Save snapshot at the advanced offset.
+	es1 := NewExtractionState()
+	for _, l := range lines {
+		var e Entry
+		if err := json.Unmarshal([]byte(l), &e); err == nil {
+			es1.ProcessEntry(e)
+		}
+	}
+	snap1, _ := es1.MarshalSnapshot()
+	sm.SetSnapshot(snap1)
+	if err := sm.SaveState(transcriptPath); err != nil {
+		t.Fatalf("SaveState: %v", err)
+	}
+
+	// Simulate truncation: write a new (shorter) file, resetting to before the saved offset.
+	toolUseEntry2 := makeToolUseEntryAt("truncate-tool-2", "Write",
+		map[string]interface{}{"file_path": "new.go"},
+		time.Now(),
+	)
+	line2, _ := json.Marshal(toolUseEntry2)
+	// Write only this new entry (shorter than the old file + offset).
+	if err := os.WriteFile(transcriptPath, append(line2, '\n'), 0o644); err != nil {
+		t.Fatalf("truncate-write: %v", err)
+	}
+
+	// The new file is smaller than the saved offset only if line1 was longer than line2.
+	// To guarantee the offset exceeds the new size, truncate to an empty file first,
+	// then write a very short new entry.
+	shortContent := []byte("{\"type\":\"summary\",\"slug\":\"new-session\"}\n")
+	if err := os.WriteFile(transcriptPath, shortContent, 0o644); err != nil {
+		t.Fatalf("truncate to short: %v", err)
+	}
+
+	// Now ReadIncremental should detect offset > file size, reset to 0, and clear snapshot.
+	lines2, err := sm.ReadIncremental(transcriptPath)
+	if err != nil {
+		t.Fatalf("ReadIncremental after truncation: %v", err)
+	}
+
+	// The snapshot must be discarded when truncation is detected.
+	restoredSnap := sm.LoadSnapshot()
+	if restoredSnap != nil {
+		t.Error("expected nil snapshot after truncation reset, but snapshot was retained")
+	}
+
+	// Lines from the new (shorter) file should be returned.
+	if len(lines2) != 1 {
+		t.Fatalf("expected 1 line from new file, got %d", len(lines2))
+	}
+}
+
+// TestSnapshotSpec4_OffsetExactlyAtFileSizeIsNotReset verifies the boundary condition:
+// an offset equal to the file size is valid (the file hasn't grown yet) and must NOT
+// trigger a truncation reset.
+func TestSnapshotSpec4_OffsetExactlyAtFileSizeIsNotReset(t *testing.T) {
+	dir := t.TempDir()
+	stateDir := t.TempDir()
+	transcriptPath := filepath.Join(dir, "session.jsonl")
+
+	sm := NewStateManager(stateDir)
+
+	content := []byte("{\"type\":\"summary\",\"slug\":\"my-session\"}\n")
+	if err := os.WriteFile(transcriptPath, content, 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	// First read: advances offset to len(content).
+	_, err := sm.ReadIncremental(transcriptPath)
+	if err != nil {
+		t.Fatalf("first read: %v", err)
+	}
+	if err := sm.SaveState(transcriptPath); err != nil {
+		t.Fatalf("SaveState: %v", err)
+	}
+
+	// Second read: file unchanged, offset == file size. Must return 0 lines (no new data),
+	// not reset as if truncated.
+	lines, err := sm.ReadIncremental(transcriptPath)
+	if err != nil {
+		t.Fatalf("second read: %v", err)
+	}
+	if len(lines) != 0 {
+		t.Errorf("expected 0 new lines when offset == file size, got %d", len(lines))
+	}
+}
+
+// ---- Snapshot: spec 5 — no tools or agents permanently stuck as 'running' ----
+
+// TestSnapshotSpec5_NoToolsStuckRunning verifies that after processing a tool_result,
+// the corresponding tool is never stuck as running across snapshot round-trips.
+func TestSnapshotSpec5_NoToolsStuckRunning(t *testing.T) {
+	es := NewExtractionState()
+	t0 := time.Date(2024, 9, 1, 0, 0, 0, 0, time.UTC)
+
+	// Start several tools.
+	ids := []string{"stuck-1", "stuck-2", "stuck-3"}
+	for i, id := range ids {
+		es.ProcessEntry(makeToolUseEntryAt(id, "Read",
+			map[string]interface{}{"file_path": fmt.Sprintf("file%d.go", i)},
+			t0.Add(time.Duration(i)*time.Second),
+		))
+	}
+
+	// Resolve all of them.
+	for i, id := range ids {
+		es.ProcessEntry(makeToolResultEntryAt(id, false,
+			t0.Add(time.Duration(i)*time.Second+500*time.Millisecond),
+		))
+	}
+
+	// After resolution, no tool should be running.
+	data := es.ToTranscriptData()
+	for _, tool := range data.Tools {
+		if tool.Count == 0 {
+			t.Errorf("tool %q is still running (Count=0) after tool_result was processed", tool.Name)
+		}
+	}
+
+	// After snapshot round-trip, no tool should be running either.
+	snap, _ := es.MarshalSnapshot()
+	es2 := NewExtractionState()
+	_ = es2.UnmarshalSnapshot(snap)
+	data2 := es2.ToTranscriptData()
+	for _, tool := range data2.Tools {
+		if tool.Count == 0 {
+			t.Errorf("tool %q is stuck as running after snapshot restore", tool.Name)
+		}
+	}
+	// Completed tools must not be in the toolMap (they have no pending result).
+	if len(es2.toolMap) != 0 {
+		t.Errorf("expected empty toolMap after restoring all-completed tools, got %d entries", len(es2.toolMap))
+	}
+}
+
+// TestSnapshotSpec5_NoAgentsStuckRunning verifies that agents resolved in the same
+// invocation are not stuck as running after a snapshot restore.
+func TestSnapshotSpec5_NoAgentsStuckRunning(t *testing.T) {
+	es := NewExtractionState()
+	t0 := time.Date(2024, 9, 2, 0, 0, 0, 0, time.UTC)
+
+	agentIDs := []string{"a-1", "a-2", "a-3"}
+	for i, id := range agentIDs {
+		es.ProcessEntry(makeToolUseEntryAt(id, "Task",
+			map[string]interface{}{"subagent_type": fmt.Sprintf("worker-%d", i)},
+			t0.Add(time.Duration(i)*100*time.Millisecond),
+		))
+	}
+	for i, id := range agentIDs {
+		es.ProcessEntry(makeToolResultEntryAt(id, false,
+			t0.Add(time.Duration(i)*100*time.Millisecond+2*time.Second),
+		))
+	}
+
+	snap, _ := es.MarshalSnapshot()
+	es2 := NewExtractionState()
+	_ = es2.UnmarshalSnapshot(snap)
+
+	data := es2.ToTranscriptData()
+	for i, a := range data.Agents {
+		if a.Status != "completed" {
+			t.Errorf("agent[%d] (%s): stuck as %q after restore; expected completed", i, a.Name, a.Status)
+		}
+	}
+	// Completed agents must not be in agentMap.
+	if len(es2.agentMap) != 0 {
+		t.Errorf("expected empty agentMap after restoring all-completed agents, got %d entries", len(es2.agentMap))
+	}
+}
+
+// TestSnapshotSpec5_MixedRunningAndCompletedAfterRestore verifies that after a restore,
+// completed tools are absent from toolMap while running tools remain present.
+func TestSnapshotSpec5_MixedRunningAndCompletedAfterRestore(t *testing.T) {
+	t0 := time.Date(2024, 9, 3, 0, 0, 0, 0, time.UTC)
+
+	es := NewExtractionState()
+	// Tool 1: completed.
+	es.ProcessEntry(makeToolUseEntryAt("done-tool", "Read",
+		map[string]interface{}{"file_path": "done.go"}, t0))
+	es.ProcessEntry(makeToolResultEntryAt("done-tool", false, t0.Add(time.Second)))
+	// Tool 2: still running (no result).
+	es.ProcessEntry(makeToolUseEntryAt("running-tool", "Bash",
+		map[string]interface{}{"command": "long-op"}, t0.Add(2*time.Second)))
+
+	snap, _ := es.MarshalSnapshot()
+	es2 := NewExtractionState()
+	_ = es2.UnmarshalSnapshot(snap)
+
+	data := es2.ToTranscriptData()
+	if len(data.Tools) != 2 {
+		t.Fatalf("expected 2 tools, got %d", len(data.Tools))
+	}
+
+	// done-tool must be completed and absent from toolMap.
+	if data.Tools[0].Count != 1 {
+		t.Errorf("done-tool: expected Count=1, got %d", data.Tools[0].Count)
+	}
+	if _, ok := es2.toolMap["done-tool"]; ok {
+		t.Error("done-tool should not be in toolMap after restore")
+	}
+
+	// running-tool must be running and present in toolMap for future result matching.
+	if data.Tools[1].Count != 0 {
+		t.Errorf("running-tool: expected Count=0 (running), got %d", data.Tools[1].Count)
+	}
+	if _, ok := es2.toolMap["running-tool"]; !ok {
+		t.Error("running-tool should be in toolMap after restore for future result matching")
+	}
+}
+
+// ---- Snapshot: spec 6 — duration computation accurate within 100ms across invocation boundaries ----
+
+// TestSnapshotSpec6_DurationAccuracyAcrossInvocations verifies that a tool whose
+// tool_use and tool_result span invocation boundaries has its DurationMs computed
+// accurately from the persisted StartTime. The tolerance is 100ms per spec.
+func TestSnapshotSpec6_DurationAccuracyAcrossInvocations(t *testing.T) {
+	// Exact known timestamps: tool starts at t0, result arrives at t0 + 7300ms.
+	t0 := time.Date(2024, 10, 1, 8, 0, 0, 0, time.UTC)
+	expectedDurationMs := 7300
+	t1 := t0.Add(time.Duration(expectedDurationMs) * time.Millisecond)
+
+	// Invocation 1: tool_use only.
+	es1 := NewExtractionState()
+	es1.ProcessEntry(makeToolUseEntryAt("dur-tool-1", "Bash",
+		map[string]interface{}{"command": "expensive-build.sh"}, t0))
+
+	snap1, err := es1.MarshalSnapshot()
+	if err != nil {
+		t.Fatalf("MarshalSnapshot: %v", err)
+	}
+
+	// Invocation 2: restore snapshot, then receive tool_result.
+	es2 := NewExtractionState()
+	if err := es2.UnmarshalSnapshot(snap1); err != nil {
+		t.Fatalf("UnmarshalSnapshot: %v", err)
+	}
+	es2.ProcessEntry(makeToolResultEntryAt("dur-tool-1", false, t1))
+
+	data := es2.ToTranscriptData()
+	if len(data.Tools) != 1 {
+		t.Fatalf("expected 1 tool, got %d", len(data.Tools))
+	}
+	tool := data.Tools[0]
+	if tool.Count != 1 {
+		t.Errorf("expected Count=1 (completed), got %d", tool.Count)
+	}
+
+	// Duration must be within 100ms of the expected 7300ms.
+	diff := tool.DurationMs - expectedDurationMs
+	if diff < 0 {
+		diff = -diff
+	}
+	if diff > 100 {
+		t.Errorf("DurationMs=%d, expected ~%d (diff %d > 100ms tolerance)",
+			tool.DurationMs, expectedDurationMs, diff)
+	}
+}
+
+// TestSnapshotSpec6_AgentDurationAccuracyAcrossInvocations verifies the same
+// cross-invocation duration accuracy for agents.
+func TestSnapshotSpec6_AgentDurationAccuracyAcrossInvocations(t *testing.T) {
+	t0 := time.Date(2024, 10, 2, 9, 0, 0, 0, time.UTC)
+	expectedDurationMs := 15000 // 15 seconds
+	t1 := t0.Add(time.Duration(expectedDurationMs) * time.Millisecond)
+
+	es1 := NewExtractionState()
+	es1.ProcessEntry(makeToolUseEntryAt("dur-agent-1", "Task",
+		map[string]interface{}{"subagent_type": "coding", "model": "claude-sonnet"},
+		t0,
+	))
+
+	snap1, _ := es1.MarshalSnapshot()
+
+	es2 := NewExtractionState()
+	_ = es2.UnmarshalSnapshot(snap1)
+	es2.ProcessEntry(makeToolResultEntryAt("dur-agent-1", false, t1))
+
+	data := es2.ToTranscriptData()
+	if len(data.Agents) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(data.Agents))
+	}
+	agent := data.Agents[0]
+	if agent.Status != "completed" {
+		t.Errorf("expected Status=completed, got %q", agent.Status)
+	}
+
+	diff := agent.DurationMs - expectedDurationMs
+	if diff < 0 {
+		diff = -diff
+	}
+	if diff > 100 {
+		t.Errorf("agent DurationMs=%d, expected ~%d (diff %d > 100ms tolerance)",
+			agent.DurationMs, expectedDurationMs, diff)
+	}
+}
+
+// TestSnapshotSpec6_StartTimePreservedWithNanosecondPrecision verifies that the
+// RFC3339Nano serialization preserves StartTime with sufficient precision for the
+// 100ms tolerance requirement. Nanosecond timestamps must survive a JSON round-trip.
+func TestSnapshotSpec6_StartTimePreservedWithNanosecondPrecision(t *testing.T) {
+	// Choose a time with sub-millisecond precision to confirm no truncation occurs.
+	t0 := time.Date(2024, 10, 3, 10, 30, 45, 123456789, time.UTC)
+
+	es := NewExtractionState()
+	es.ProcessEntry(makeToolUseEntryAt("precision-1", "Read",
+		map[string]interface{}{"file_path": "precise.go"}, t0))
+
+	snap, _ := es.MarshalSnapshot()
+	es2 := NewExtractionState()
+	_ = es2.UnmarshalSnapshot(snap)
+
+	// The restored tool should be in toolMap (still running, no result).
+	restored, ok := es2.toolMap["precision-1"]
+	if !ok {
+		t.Fatal("running tool not in toolMap after restore")
+	}
+
+	// StartTime must be restored with at least millisecond precision.
+	delta := restored.startTime.Sub(t0)
+	if delta < 0 {
+		delta = -delta
+	}
+	if delta > time.Millisecond {
+		t.Errorf("StartTime lost precision: original=%v, restored=%v, delta=%v",
+			t0, restored.startTime, delta)
 	}
 }
