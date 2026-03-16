@@ -22,11 +22,11 @@ var Registry = map[string]RenderFunc{
 	"project":   Project,
 	"env":       Env,
 	"duration":  Duration,
-	"tools":    Tools,
-	"agents":   Agents,
-	"todos":    Todos,
-	"session":  Session,
-	"thinking": Thinking,
+	"tools":     Tools,
+	"agents":    Agents,
+	"todos":     Todos,
+	"session":   Session,
+	"thinking":  Thinking,
 }
 
 // Icons holds the icon strings for a given display mode (nerdfont, unicode, ascii).
@@ -55,25 +55,25 @@ func IconsFor(mode string) Icons {
 	switch mode {
 	case "nerdfont":
 		return Icons{
-			Check:   "\uf00c", // nf-fa-check
-			Running: "◐",      // half-filled circle: static running indicator
-			Clock:   "\uf017", // nf-fa-clock_o
-			Folder:  "\uf07b",     // nf-fa-folder
-			Branch:  "\ue0a0",     // nf-pl-branch
-			Read:    "\ue28b",     // book
-			Edit:    "\uee75",     // pen
-			Shell:   "\U000F0BE0", // wrench
-			Search:  "\U000F0968", // folder-search
-			Web:     "\U000F059F", // web
-			Agent:   "\U000F167A", // robot
-			Gear:    "\uf013",     // gear
-			Thinking: "\uf0eb",   // lightbulb
-			Error:   "\uf00d",     // cross
+			Check:    "\uf00c",     // nf-fa-check
+			Running:  "󰪠",          // half-filled circle: static running indicator
+			Clock:    "\uf017",     // nf-fa-clock_o
+			Folder:   "\uf07b",     // nf-fa-folder
+			Branch:   "\ue0a0",     // nf-pl-branch
+			Read:     "\ue28b",     // book
+			Edit:     "\uee75",     // pen
+			Shell:    "\U000F0BE0", // wrench
+			Search:   "\U000F0968", // folder-search
+			Web:      "\U000F059F", // web
+			Agent:    "\U000F167A", // robot
+			Gear:     "\uf013",     // gear
+			Thinking: "\uf0eb",     // lightbulb
+			Error:    "\uf00d",     // cross
 		}
 	case "unicode":
 		return Icons{
-			Check:   "✓",
-			Running: "◐",
+			Check:    "✓",
+			Running:  "◐",
 			Clock:    "⏱",
 			Folder:   "📁",
 			Branch:   "⎇",
@@ -89,8 +89,8 @@ func IconsFor(mode string) Icons {
 		}
 	default: // ascii
 		return Icons{
-			Check:   "v",
-			Running: "~",
+			Check:    "v",
+			Running:  "~",
 			Clock:    "@",
 			Folder:   ">",
 			Branch:   "#",
