@@ -5,10 +5,13 @@
 package gather
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/charmbracelet/x/term"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/config"
@@ -144,12 +147,42 @@ func gatherTranscript(path string) *model.TranscriptData {
 	td := es.ToTranscriptData()
 	td.Path = path
 
+	// Merge filesystem-discovered subagents that the transcript extractor
+	// missed (background agents complete in ~6ms, so the extractor marks them
+	// "completed" before they actually finish).
+	mergeSubagents(td, discoverSubagents(path))
+
 	// Persist the updated extraction state alongside the byte offset.
 	if snap, err := es.MarshalSnapshot(); err == nil {
 		sm.SetSnapshot(snap)
 	}
 	_ = sm.SaveState(path)
 	return td
+}
+
+// readFirstLine opens a file and returns its first newline-terminated line.
+// Returns nil when the file is missing, empty, or unreadable.
+func readFirstLine(path string) []byte {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+
+	buf := make([]byte, 4096)
+	n, _ := f.Read(buf)
+	if n == 0 {
+		return nil
+	}
+
+	line := buf[:n]
+	for i, b := range line {
+		if b == '\n' {
+			line = line[:i]
+			break
+		}
+	}
+	return line
 }
 
 // sessionStart returns the RFC3339 timestamp of the first entry in the
@@ -161,28 +194,9 @@ func sessionStart(td *model.TranscriptData, path string) string {
 		return ""
 	}
 
-	// We need the raw first-line timestamp from the file, independent of the
-	// incremental-read offset, so open the file directly from byte 0.
-	f, err := os.Open(path)
-	if err != nil {
+	line := readFirstLine(path)
+	if line == nil {
 		return ""
-	}
-	defer f.Close()
-
-	// Read just enough bytes to find the first complete line.
-	buf := make([]byte, 4096)
-	n, _ := f.Read(buf)
-	if n == 0 {
-		return ""
-	}
-
-	// Find the first newline-terminated line.
-	line := buf[:n]
-	for i, b := range line {
-		if b == '\n' {
-			line = line[:i]
-			break
-		}
 	}
 
 	e, err := transcript.ParseEntry(line)
@@ -224,6 +238,131 @@ func terminalWidth() int {
 		return 0
 	}
 	return n
+}
+
+// subagentStaleThreshold is the duration after which a subagent file's modtime
+// indicates the agent has completed. Files modified within this window are
+// considered still running.
+const subagentStaleThreshold = 30 * time.Second
+
+// discoverSubagents scans the filesystem for subagent JSONL files associated
+// with the given transcript path. It derives the subagents directory from the
+// transcript path ({dir}/{session-uuid}/subagents/) and returns lightweight
+// AgentEntry values based on file metadata alone.
+//
+// The approach mirrors .cloned-sources/tail-claude/parser/subagent.go:DiscoverSubagents
+// but avoids full file parsing. Status is inferred from modtime: files modified
+// within subagentStaleThreshold are "running", others are "completed".
+func discoverSubagents(transcriptPath string) []model.AgentEntry {
+	dir := filepath.Dir(transcriptPath)
+	base := strings.TrimSuffix(filepath.Base(transcriptPath), ".jsonl")
+	subagentsDir := filepath.Join(dir, base, "subagents")
+
+	entries, err := os.ReadDir(subagentsDir)
+	if err != nil {
+		return nil
+	}
+
+	now := time.Now()
+	var agents []model.AgentEntry
+	colorIdx := 0
+
+	for _, de := range entries {
+		if de.IsDir() {
+			continue
+		}
+		name := de.Name()
+		if !strings.HasPrefix(name, "agent-") || !strings.HasSuffix(name, ".jsonl") {
+			continue
+		}
+
+		agentID := strings.TrimPrefix(name, "agent-")
+		agentID = strings.TrimSuffix(agentID, ".jsonl")
+
+		// Filter compact agents (context compaction artifacts).
+		if strings.HasPrefix(agentID, "acompact") {
+			continue
+		}
+
+		info, err := de.Info()
+		if err != nil || info.Size() == 0 {
+			continue
+		}
+
+		// Filter warmup agents by checking the first user message.
+		filePath := filepath.Join(subagentsDir, name)
+		if isWarmupAgent(filePath) {
+			continue
+		}
+
+		status := "completed"
+		if now.Sub(info.ModTime()) < subagentStaleThreshold {
+			status = "running"
+		}
+
+		agents = append(agents, model.AgentEntry{
+			Name:       agentID,
+			Status:     status,
+			StartTime:  info.ModTime(),
+			ColorIndex: colorIdx % 8,
+		})
+		colorIdx++
+	}
+
+	return agents
+}
+
+// isWarmupAgent reads only the first line of a subagent JSONL file to check
+// whether the agent is a warmup probe (content == "Warmup"). Returns false
+// on any read or parse error.
+func isWarmupAgent(path string) bool {
+	line := readFirstLine(path)
+	if line == nil {
+		return false
+	}
+
+	var entry struct {
+		Message struct {
+			Content json.RawMessage `json:"content"`
+		} `json:"message"`
+	}
+	if err := json.Unmarshal(line, &entry); err != nil {
+		return false
+	}
+
+	var content string
+	if err := json.Unmarshal(entry.Message.Content, &content); err != nil {
+		return false
+	}
+	return content == "Warmup"
+}
+
+// mergeSubagents folds filesystem-discovered agents into the transcript data.
+// For each filesystem agent: if the transcript already has a matching agent
+// (by name), the filesystem status takes precedence when it says "running"
+// but the transcript says "completed". If no match exists, the agent is appended.
+func mergeSubagents(td *model.TranscriptData, fsAgents []model.AgentEntry) {
+	if len(fsAgents) == 0 {
+		return
+	}
+
+	// Index existing transcript agents by name for quick lookup.
+	byName := make(map[string]int, len(td.Agents))
+	for i, a := range td.Agents {
+		byName[a.Name] = i
+	}
+
+	for _, fa := range fsAgents {
+		if idx, ok := byName[fa.Name]; ok {
+			// Filesystem says running but transcript says completed: override.
+			if fa.Status == "running" && td.Agents[idx].Status == "completed" {
+				td.Agents[idx].Status = "running"
+				td.Agents[idx].DurationMs = 0
+			}
+		} else {
+			td.Agents = append(td.Agents, fa)
+		}
+	}
 }
 
 // transcriptStateDir returns the directory used for incremental-read state files.
