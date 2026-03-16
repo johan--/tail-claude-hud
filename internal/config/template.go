@@ -47,9 +47,11 @@ show_context_size = true
 
 # Context widget — visualises token usage as a progress bar.
 [context]
-# Width of the bar in characters.
+# Width of the bar in characters (used when display is "bar" or "both").
 bar_width = 10
-# How to display context usage: "percent" or "tokens".
+# How to render context: "text" (default), "bar", or "both".
+display = "text"
+# How to display the text value: "percent" (default), "tokens", or "remaining".
 value = "percent"
 # Show the input/cache/output token breakdown alongside the bar.
 show_breakdown = true

@@ -25,6 +25,7 @@ type Config struct {
 	} `toml:"model"`
 	Context struct {
 		BarWidth      int    `toml:"bar_width"`
+		Display       string `toml:"display"`
 		Value         string `toml:"value"`
 		ShowBreakdown bool   `toml:"show_breakdown"`
 	} `toml:"context"`
@@ -61,6 +62,7 @@ func defaults() *Config {
 	cfg.Model.ShowContextSize = true
 
 	cfg.Context.BarWidth = 10
+	cfg.Context.Display = "text"
 	cfg.Context.Value = "percent"
 	cfg.Context.ShowBreakdown = true
 

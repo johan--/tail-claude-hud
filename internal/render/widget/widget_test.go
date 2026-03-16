@@ -214,6 +214,227 @@ func TestContextWidget_BreakdownDisabled(t *testing.T) {
 	}
 }
 
+// -- renderBar ----------------------------------------------------------------
+
+func TestRenderBar_ZeroPercent(t *testing.T) {
+	got := renderBar(0, 10)
+	want := "░░░░░░░░░░"
+	if got != want {
+		t.Errorf("renderBar(0, 10) = %q, want %q", got, want)
+	}
+}
+
+func TestRenderBar_FullPercent(t *testing.T) {
+	got := renderBar(100, 10)
+	want := "██████████"
+	if got != want {
+		t.Errorf("renderBar(100, 10) = %q, want %q", got, want)
+	}
+}
+
+func TestRenderBar_FiftyPercent(t *testing.T) {
+	got := renderBar(50, 10)
+	want := "█████░░░░░"
+	if got != want {
+		t.Errorf("renderBar(50, 10) = %q, want %q", got, want)
+	}
+}
+
+func TestRenderBar_WidthFive(t *testing.T) {
+	// 40% of width 5 = 2 filled
+	got := renderBar(40, 5)
+	want := "██░░░"
+	if got != want {
+		t.Errorf("renderBar(40, 5) = %q, want %q", got, want)
+	}
+}
+
+func TestRenderBar_ClampsBelowZero(t *testing.T) {
+	got := renderBar(-10, 10)
+	want := "░░░░░░░░░░"
+	if got != want {
+		t.Errorf("renderBar(-10, 10) = %q, want %q", got, want)
+	}
+}
+
+func TestRenderBar_ClampsAbove100(t *testing.T) {
+	got := renderBar(150, 10)
+	want := "██████████"
+	if got != want {
+		t.Errorf("renderBar(150, 10) = %q, want %q", got, want)
+	}
+}
+
+// -- contextThresholds color boundary tests -----------------------------------
+
+// Normal: below 60% → green (context color)
+func TestContextThresholds_NormalBelow60(t *testing.T) {
+	green := lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+	yellow := lipgloss.NewStyle().Foreground(lipgloss.Color("220"))
+	red := lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+
+	got := contextThresholds(59, green, yellow, red)
+	if got.Render("x") != green.Render("x") {
+		t.Errorf("contextThresholds(59): expected green, got different style")
+	}
+}
+
+// Warning boundary: exactly 60% → yellow
+func TestContextThresholds_WarningAt60(t *testing.T) {
+	green := lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+	yellow := lipgloss.NewStyle().Foreground(lipgloss.Color("220"))
+	red := lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+
+	got := contextThresholds(60, green, yellow, red)
+	if got.Render("x") != yellow.Render("x") {
+		t.Errorf("contextThresholds(60): expected yellow (warning), got different style")
+	}
+}
+
+// Still warning at 79%
+func TestContextThresholds_WarningAt79(t *testing.T) {
+	green := lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+	yellow := lipgloss.NewStyle().Foreground(lipgloss.Color("220"))
+	red := lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+
+	got := contextThresholds(79, green, yellow, red)
+	if got.Render("x") != yellow.Render("x") {
+		t.Errorf("contextThresholds(79): expected yellow (warning), got different style")
+	}
+}
+
+// Critical boundary: exactly 80% → red
+func TestContextThresholds_CriticalAt80(t *testing.T) {
+	green := lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+	yellow := lipgloss.NewStyle().Foreground(lipgloss.Color("220"))
+	red := lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+
+	got := contextThresholds(80, green, yellow, red)
+	if got.Render("x") != red.Render("x") {
+		t.Errorf("contextThresholds(80): expected red (critical), got different style")
+	}
+}
+
+// Critical well above threshold
+func TestContextThresholds_CriticalAt100(t *testing.T) {
+	green := lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+	yellow := lipgloss.NewStyle().Foreground(lipgloss.Color("220"))
+	red := lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+
+	got := contextThresholds(100, green, yellow, red)
+	if got.Render("x") != red.Render("x") {
+		t.Errorf("contextThresholds(100): expected red (critical), got different style")
+	}
+}
+
+// -- Context widget display modes ---------------------------------------------
+
+func TestContextWidget_BarMode_ContainsBlockChars(t *testing.T) {
+	ctx := &model.RenderContext{ContextPercent: 50, ContextWindowSize: 200000}
+	cfg := defaultCfg()
+	cfg.Context.Display = "bar"
+
+	got := Context(ctx, cfg)
+	if !strings.Contains(got, "█") {
+		t.Errorf("bar mode: expected filled block char '█', got %q", got)
+	}
+	if !strings.Contains(got, "░") {
+		t.Errorf("bar mode: expected empty block char '░', got %q", got)
+	}
+	// Bar mode must not show the percent label.
+	if strings.Contains(got, "%") {
+		t.Errorf("bar mode: expected no percent label, got %q", got)
+	}
+}
+
+func TestContextWidget_BarMode_ZeroPercent(t *testing.T) {
+	// Zero ContextPercent but non-zero window size should render an empty bar.
+	ctx := &model.RenderContext{ContextPercent: 0, ContextWindowSize: 200000}
+	cfg := defaultCfg()
+	cfg.Context.Display = "bar"
+
+	got := Context(ctx, cfg)
+	if !strings.Contains(got, "░") {
+		t.Errorf("bar mode 0%%: expected all-empty bar (░), got %q", got)
+	}
+	if strings.Contains(got, "█") {
+		t.Errorf("bar mode 0%%: expected no filled block, got %q", got)
+	}
+}
+
+func TestContextWidget_BarMode_FullPercent(t *testing.T) {
+	ctx := &model.RenderContext{ContextPercent: 100, ContextWindowSize: 200000}
+	cfg := defaultCfg()
+	cfg.Context.Display = "bar"
+
+	got := Context(ctx, cfg)
+	if !strings.Contains(got, "█") {
+		t.Errorf("bar mode 100%%: expected filled bar (█), got %q", got)
+	}
+	if strings.Contains(got, "░") {
+		t.Errorf("bar mode 100%%: expected no empty block, got %q", got)
+	}
+}
+
+func TestContextWidget_BothMode_ContainsBarAndLabel(t *testing.T) {
+	ctx := &model.RenderContext{ContextPercent: 42, ContextWindowSize: 200000}
+	cfg := defaultCfg()
+	cfg.Context.Display = "both"
+	cfg.Context.Value = "percent"
+
+	got := Context(ctx, cfg)
+	if !strings.Contains(got, "█") && !strings.Contains(got, "░") {
+		t.Errorf("both mode: expected block chars, got %q", got)
+	}
+	if !strings.Contains(got, "42%") {
+		t.Errorf("both mode: expected '42%%' label, got %q", got)
+	}
+}
+
+func TestContextWidget_TextMode_NoBlockChars(t *testing.T) {
+	ctx := &model.RenderContext{ContextPercent: 50, ContextWindowSize: 200000}
+	cfg := defaultCfg()
+	cfg.Context.Display = "text"
+
+	got := Context(ctx, cfg)
+	if strings.Contains(got, "█") || strings.Contains(got, "░") {
+		t.Errorf("text mode: expected no block chars, got %q", got)
+	}
+	if !strings.Contains(got, "50%") {
+		t.Errorf("text mode: expected '50%%', got %q", got)
+	}
+}
+
+func TestContextWidget_DefaultDisplayIsText(t *testing.T) {
+	// Empty Display string should behave like "text".
+	ctx := &model.RenderContext{ContextPercent: 55, ContextWindowSize: 200000}
+	cfg := defaultCfg()
+	cfg.Context.Display = ""
+
+	got := Context(ctx, cfg)
+	if strings.Contains(got, "█") || strings.Contains(got, "░") {
+		t.Errorf("empty display: expected text mode (no block chars), got %q", got)
+	}
+	if !strings.Contains(got, "55%") {
+		t.Errorf("empty display: expected '55%%', got %q", got)
+	}
+}
+
+func TestContextWidget_BarWidthConfigurable(t *testing.T) {
+	ctx := &model.RenderContext{ContextPercent: 100, ContextWindowSize: 200000}
+	cfg := defaultCfg()
+	cfg.Context.Display = "bar"
+	cfg.Context.BarWidth = 5
+
+	got := Context(ctx, cfg)
+	// Strip ANSI sequences by checking raw rune count of block chars.
+	filled := strings.Count(got, "█")
+	empty := strings.Count(got, "░")
+	if filled+empty != 5 {
+		t.Errorf("bar width 5, 100%%: expected 5 block chars total, got %d filled + %d empty in %q", filled, empty, got)
+	}
+}
+
 // -- formatTokenCount ---------------------------------------------------------
 
 func TestFormatTokenCount(t *testing.T) {

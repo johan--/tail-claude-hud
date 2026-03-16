@@ -2,6 +2,7 @@ package widget
 
 import (
 	"fmt"
+	"strings"
 
 	"charm.land/lipgloss/v2"
 
@@ -26,9 +27,46 @@ func colorStyle(colorName string, fallback lipgloss.Style) lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(lipgloss.Color(colorName))
 }
 
-// Context renders a filled/empty progress bar representing context window usage,
-// followed by a value label. The bar color shifts from green to yellow at 70%
-// and from yellow to red at 85%.
+// contextThresholds returns the color style for the given usage percentage.
+// Warning fires at >=60% used (<=40% remaining); critical at >=80% (<=20% remaining).
+func contextThresholds(pct int, contextColor, warningColor, criticalColor lipgloss.Style) lipgloss.Style {
+	switch {
+	case pct >= 80:
+		return criticalColor
+	case pct >= 60:
+		return warningColor
+	default:
+		return contextColor
+	}
+}
+
+// renderBar builds a block-character progress bar of the given width.
+// Filled cells use █ and empty cells use ░.
+// Example for 40% at width 10: "████░░░░░░"
+func renderBar(pct, width int) string {
+	if width <= 0 {
+		width = 10
+	}
+	if pct < 0 {
+		pct = 0
+	}
+	if pct > 100 {
+		pct = 100
+	}
+	filled := (pct * width) / 100
+	return strings.Repeat("█", filled) + strings.Repeat("░", width-filled)
+}
+
+// Context renders context window usage as a styled label, a block-character
+// progress bar, or both, depending on cfg.Context.Display.
+//
+// Display modes (cfg.Context.Display):
+//   - "text" (default): show the value label only
+//   - "bar": show the progress bar only
+//   - "both": show the bar followed by the value label
+//
+// The color shifts at usage thresholds: normal below 60%, warning at 60–79%,
+// critical at 80%+. These map to <=40% remaining and <=20% remaining.
 //
 // The label format is controlled by cfg.Context.Value:
 //   - "percent" (default): "42%"
@@ -56,13 +94,7 @@ func Context(ctx *model.RenderContext, cfg *config.Config) string {
 	warningColor := colorStyle(cfg.Style.Colors.Warning, yellowStyle)
 	criticalColor := colorStyle(cfg.Style.Colors.Critical, redStyle)
 
-	// Select color based on usage thresholds.
-	activeStyle := contextColor
-	if pct >= 85 {
-		activeStyle = criticalColor
-	} else if pct >= 70 {
-		activeStyle = warningColor
-	}
+	activeStyle := contextThresholds(pct, contextColor, warningColor, criticalColor)
 
 	// Compute token totals used by "tokens" and "remaining" modes.
 	used := ctx.InputTokens + ctx.CacheCreation + ctx.CacheRead
@@ -80,7 +112,17 @@ func Context(ctx *model.RenderContext, cfg *config.Config) string {
 		label = fmt.Sprintf("%d%%", pct)
 	}
 
-	result := activeStyle.Render(label)
+	// Assemble the output according to the display mode.
+	var result string
+	switch cfg.Context.Display {
+	case "bar":
+		result = activeStyle.Render(renderBar(pct, barWidth))
+	case "both":
+		bar := activeStyle.Render(renderBar(pct, barWidth))
+		result = bar + " " + activeStyle.Render(label)
+	default: // "text" or empty
+		result = activeStyle.Render(label)
+	}
 
 	// Append token breakdown when context is high and breakdown is enabled.
 	if pct > 85 && cfg.Context.ShowBreakdown {
