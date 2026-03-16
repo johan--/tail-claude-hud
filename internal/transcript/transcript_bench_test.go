@@ -167,3 +167,79 @@ func BenchmarkIncremental_5NewLines(b *testing.B) {
 		}
 	}
 }
+
+// BenchmarkIncremental_1NewLine measures ReadIncremental for the minimal delta:
+// a single new line appended to a 1k-line base. Represents a very active session
+// where the status updates almost every assistant turn.
+func BenchmarkIncremental_1NewLine(b *testing.B) {
+	benchmarkIncrementalDelta(b, 1_000, 1)
+}
+
+// BenchmarkIncremental_10NewLines measures ReadIncremental for a 10-line delta
+// appended to a 1k-line base. Typical when the HUD polls infrequently.
+func BenchmarkIncremental_10NewLines(b *testing.B) {
+	benchmarkIncrementalDelta(b, 1_000, 10)
+}
+
+// BenchmarkIncremental_50NewLines measures ReadIncremental for a 50-line delta
+// appended to a 1k-line base. Represents a burst of tool invocations between ticks.
+func BenchmarkIncremental_50NewLines(b *testing.B) {
+	benchmarkIncrementalDelta(b, 1_000, 50)
+}
+
+// BenchmarkIncremental_100NewLines measures ReadIncremental for a 100-line delta
+// appended to a 1k-line base (upper bound of typical deltas).
+func BenchmarkIncremental_100NewLines(b *testing.B) {
+	benchmarkIncrementalDelta(b, 1_000, 100)
+}
+
+// benchmarkIncrementalDelta is the shared implementation for incremental-read
+// delta-size benchmarks. It writes baseLines to a file, saves state, then
+// appends deltaLines and measures the cost of ReadIncremental over the delta.
+func benchmarkIncrementalDelta(b *testing.B, baseLines, deltaLines int) {
+	b.Helper()
+	b.ReportAllocs()
+
+	base := syntheticTranscript(baseLines)
+	extra := syntheticTranscript(deltaLines)
+
+	dir := b.TempDir()
+	transcriptPath := filepath.Join(dir, "session.jsonl")
+	stateDir := filepath.Join(dir, "state")
+
+	if err := os.WriteFile(transcriptPath, base, 0o644); err != nil {
+		b.Fatalf("write base transcript: %v", err)
+	}
+
+	// Consume and persist offset at the base mark.
+	sm := transcript.NewStateManager(stateDir)
+	if _, err := sm.ReadIncremental(transcriptPath); err != nil {
+		b.Fatalf("ReadIncremental (base): %v", err)
+	}
+	if err := sm.SaveState(transcriptPath); err != nil {
+		b.Fatalf("SaveState: %v", err)
+	}
+
+	// Append delta lines once. Each benchmark iteration re-reads from the saved offset.
+	f, err := os.OpenFile(transcriptPath, os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		b.Fatalf("open for append: %v", err)
+	}
+	if _, err := f.Write(extra); err != nil {
+		f.Close()
+		b.Fatalf("append lines: %v", err)
+	}
+	f.Close()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		smIter := transcript.NewStateManager(stateDir)
+		lines, err := smIter.ReadIncremental(transcriptPath)
+		if err != nil {
+			b.Fatalf("ReadIncremental: %v", err)
+		}
+		if len(lines) != deltaLines {
+			b.Fatalf("expected %d new lines, got %d", deltaLines, len(lines))
+		}
+	}
+}
