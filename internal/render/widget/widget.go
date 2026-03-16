@@ -34,6 +34,17 @@ type Icons struct {
 	Clock   string
 	Folder  string
 	Branch  string
+
+	// Tool category icons
+	Read     string
+	Edit     string
+	Shell    string
+	Search   string
+	Web      string
+	Agent    string
+	Gear     string
+	Thinking string
+	Error    string
 }
 
 // IconsFor returns the icon set for the given mode string.
@@ -42,27 +53,76 @@ func IconsFor(mode string) Icons {
 	switch mode {
 	case "nerdfont":
 		return Icons{
-			Check:   "\uf00c", // nf-fa-check
-			Spinner: "\uf110", // nf-fa-spinner
-			Clock:   "\uf017", // nf-fa-clock_o
-			Folder:  "\uf07b", // nf-fa-folder
-			Branch:  "\ue0a0", // nf-pl-branch
+			Check:   "\uf00c",     // nf-fa-check
+			Spinner: "\uf110",     // nf-fa-spinner
+			Clock:   "\uf017",     // nf-fa-clock_o
+			Folder:  "\uf07b",     // nf-fa-folder
+			Branch:  "\ue0a0",     // nf-pl-branch
+			Read:    "\ue28b",     // book
+			Edit:    "\uee75",     // pen
+			Shell:   "\U000F0BE0", // wrench
+			Search:  "\U000F0968", // folder-search
+			Web:     "\U000F059F", // web
+			Agent:   "\U000F167A", // robot
+			Gear:    "\uf013",     // gear
+			Thinking: "\uf0eb",   // lightbulb
+			Error:   "\uf00d",     // cross
 		}
 	case "unicode":
 		return Icons{
-			Check:   "✓",
-			Spinner: "◐",
-			Clock:   "⏱",
-			Folder:  "📁",
-			Branch:  "⎇",
+			Check:    "✓",
+			Spinner:  "◐",
+			Clock:    "⏱",
+			Folder:   "📁",
+			Branch:   "⎇",
+			Read:     "📖",
+			Edit:     "✎",
+			Shell:    "⚒",
+			Search:   "🔍",
+			Web:      "🌐",
+			Agent:    "🤖",
+			Gear:     "⚙",
+			Thinking: "🧠",
+			Error:    "✗",
 		}
 	default: // ascii
 		return Icons{
-			Check:   "v",
-			Spinner: "*",
-			Clock:   "@",
-			Folder:  ">",
-			Branch:  "#",
+			Check:    "v",
+			Spinner:  "*",
+			Clock:    "@",
+			Folder:   ">",
+			Branch:   "#",
+			Read:     "R",
+			Edit:     "E",
+			Shell:    "$",
+			Search:   "?",
+			Web:      "W",
+			Agent:    "@",
+			Gear:     "*",
+			Thinking: "~",
+			Error:    "!",
 		}
+	}
+}
+
+// CategoryIcon returns the icon for a tool category.
+// Recognized categories: "file", "shell", "search", "web", "agent", "internal".
+// Unknown categories default to the Gear icon.
+func CategoryIcon(icons Icons, category string) string {
+	switch category {
+	case "file":
+		return icons.Read
+	case "shell":
+		return icons.Shell
+	case "search":
+		return icons.Search
+	case "web":
+		return icons.Web
+	case "agent":
+		return icons.Agent
+	case "internal":
+		return icons.Gear
+	default:
+		return icons.Gear
 	}
 }

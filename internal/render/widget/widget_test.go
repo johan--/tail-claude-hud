@@ -936,3 +936,73 @@ func TestSessionWidget_RegisteredInRegistry(t *testing.T) {
 		t.Error("Registry missing 'session' widget")
 	}
 }
+
+// -- New icon fields ----------------------------------------------------------
+
+func TestIconsFor_NewFieldsNonEmpty(t *testing.T) {
+	modes := []string{"nerdfont", "unicode", "ascii"}
+	for _, mode := range modes {
+		icons := IconsFor(mode)
+		fields := map[string]string{
+			"Read":     icons.Read,
+			"Edit":     icons.Edit,
+			"Shell":    icons.Shell,
+			"Search":   icons.Search,
+			"Web":      icons.Web,
+			"Agent":    icons.Agent,
+			"Gear":     icons.Gear,
+			"Thinking": icons.Thinking,
+			"Error":    icons.Error,
+		}
+		for name, val := range fields {
+			if val == "" {
+				t.Errorf("IconsFor(%q).%s is empty", mode, name)
+			}
+		}
+	}
+}
+
+// -- CategoryIcon -------------------------------------------------------------
+
+func TestCategoryIcon_KnownCategories(t *testing.T) {
+	icons := IconsFor("ascii")
+	tests := []struct {
+		category string
+		want     string
+	}{
+		{"file", icons.Read},
+		{"shell", icons.Shell},
+		{"search", icons.Search},
+		{"web", icons.Web},
+		{"agent", icons.Agent},
+		{"internal", icons.Gear},
+	}
+	for _, tt := range tests {
+		got := CategoryIcon(icons, tt.category)
+		if got != tt.want {
+			t.Errorf("CategoryIcon(ascii, %q) = %q, want %q", tt.category, got, tt.want)
+		}
+	}
+}
+
+func TestCategoryIcon_UnknownFallsBackToGear(t *testing.T) {
+	icons := IconsFor("ascii")
+	got := CategoryIcon(icons, "unknown-category")
+	if got != icons.Gear {
+		t.Errorf("CategoryIcon(ascii, \"unknown-category\") = %q, want Gear %q", got, icons.Gear)
+	}
+}
+
+func TestCategoryIcon_AllModesReturnNonEmpty(t *testing.T) {
+	categories := []string{"file", "shell", "search", "web", "agent", "internal", "unknown"}
+	modes := []string{"nerdfont", "unicode", "ascii"}
+	for _, mode := range modes {
+		icons := IconsFor(mode)
+		for _, cat := range categories {
+			got := CategoryIcon(icons, cat)
+			if got == "" {
+				t.Errorf("CategoryIcon(%q, %q) returned empty string", mode, cat)
+			}
+		}
+	}
+}
