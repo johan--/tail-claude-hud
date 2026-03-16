@@ -2,11 +2,18 @@ package widget
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/config"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/model"
 )
+
+// freshSep is the colored separator placed after the newest tool entry (index 0).
+// It uses yellowStyle (matching running-tool color) to signal the "fresh boundary":
+// everything to its left is newer than everything to its right.
+var freshSep = yellowStyle.Render(" | ")
+
+// dimSep is the normal separator used between all non-fresh tool entries.
+var dimSep = dimStyle.Render(" | ")
 
 const maxVisibleTools = 5
 
@@ -56,7 +63,27 @@ func Tools(ctx *model.RenderContext, cfg *config.Config) string {
 		parts = append(parts, renderToolEntry(icons, t))
 	}
 
-	return strings.Join(parts, " | ")
+	return joinWithFreshBoundary(parts)
+}
+
+// joinWithFreshBoundary joins tool entry parts with colored separators.
+// The separator after the first (newest) entry uses freshSep (yellow) to mark
+// the "fresh boundary": everything left of it is newer than everything to its
+// right. All subsequent separators use the dim style to stay visually quiet.
+// When only one entry is present no separator is emitted.
+func joinWithFreshBoundary(parts []string) string {
+	if len(parts) == 0 {
+		return ""
+	}
+	out := parts[0]
+	for i := 1; i < len(parts); i++ {
+		sep := dimSep
+		if i == 1 {
+			sep = freshSep
+		}
+		out += sep + parts[i]
+	}
+	return out
 }
 
 // renderToolEntry formats a single tool entry according to its state.

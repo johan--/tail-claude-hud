@@ -268,6 +268,118 @@ func TestTools_MaxToolsBufferFillsAndPrunes(t *testing.T) {
 	}
 }
 
+// TestTools_ColoredFirstSeparator verifies that the separator between the first
+// and second tool entries is visually distinct (uses freshSep, yellow-colored)
+// while subsequent separators use the dim style.
+//
+// Spec 1: the separator after the newest tool (index 0) must differ from the
+// separator between later tools.
+// Spec 2: when a new tool arrives at the front, the colored separator shifts
+// with it — validated by checking the first separator is always freshSep.
+// Spec 3: the colored separator matches the running-tool color scheme (yellow).
+func TestTools_ColoredFirstSeparator(t *testing.T) {
+	t.Run("two completed tools has colored first separator", func(t *testing.T) {
+		tools := []model.ToolEntry{
+			{Name: "OldTool", Count: 1, DurationMs: 100, Category: "internal"},
+			{Name: "NewTool", Count: 1, DurationMs: 200, Category: "internal"},
+		}
+		ctx := toolsCtx(tools)
+		cfg := defaultCfg()
+
+		got := Tools(ctx, cfg)
+
+		// The fresh separator (yellow) must appear between the two entries.
+		if !strings.Contains(got, freshSep) {
+			t.Errorf("expected fresh (yellow) separator in output, got %q", got)
+		}
+	})
+
+	t.Run("three tools: first separator is fresh, second is dim", func(t *testing.T) {
+		tools := []model.ToolEntry{
+			{Name: "A", Count: 1, DurationMs: 100, Category: "internal"},
+			{Name: "B", Count: 1, DurationMs: 200, Category: "internal"},
+			{Name: "C", Count: 1, DurationMs: 300, Category: "internal"},
+		}
+		ctx := toolsCtx(tools)
+		cfg := defaultCfg()
+
+		got := Tools(ctx, cfg)
+
+		// Visible order: C (newest), B, A.
+		// Separators: C [freshSep] B [dimSep] A.
+		freshIdx := strings.Index(got, freshSep)
+		dimIdx := strings.Index(got, dimSep)
+
+		if freshIdx < 0 {
+			t.Fatalf("expected fresh separator in output, got %q", got)
+		}
+		if dimIdx < 0 {
+			t.Fatalf("expected dim separator in output, got %q", got)
+		}
+		// The fresh separator must appear before the dim one.
+		if freshIdx > dimIdx {
+			t.Errorf("fresh separator (pos %d) should precede dim separator (pos %d) in %q", freshIdx, dimIdx, got)
+		}
+	})
+
+	t.Run("single tool has no separator", func(t *testing.T) {
+		tools := []model.ToolEntry{
+			{Name: "Solo", Count: 1, DurationMs: 100, Category: "internal"},
+		}
+		ctx := toolsCtx(tools)
+		cfg := defaultCfg()
+
+		got := Tools(ctx, cfg)
+
+		if strings.Contains(got, freshSep) {
+			t.Errorf("single-entry output should have no separator, got %q", got)
+		}
+		if strings.Contains(got, dimSep) {
+			t.Errorf("single-entry output should have no separator, got %q", got)
+		}
+	})
+
+	t.Run("fresh separator shifts when new tool arrives at front", func(t *testing.T) {
+		// Simulate before: two completed tools.
+		before := []model.ToolEntry{
+			{Name: "Tool1", Count: 1, DurationMs: 100, Category: "internal"},
+			{Name: "Tool2", Count: 1, DurationMs: 200, Category: "internal"},
+		}
+		// Simulate after: a third (newer) tool is added.
+		after := []model.ToolEntry{
+			{Name: "Tool1", Count: 1, DurationMs: 100, Category: "internal"},
+			{Name: "Tool2", Count: 1, DurationMs: 200, Category: "internal"},
+			{Name: "Tool3", Count: 1, DurationMs: 300, Category: "internal"},
+		}
+		cfg := defaultCfg()
+
+		gotBefore := Tools(toolsCtx(before), cfg)
+		gotAfter := Tools(toolsCtx(after), cfg)
+
+		// In "before", freshSep appears after Tool2 (the newest at that time).
+		// In "after", freshSep appears after Tool3 (now the newest).
+		// Both must contain freshSep and it must precede Tool1 in both cases
+		// (Tool1 is always the oldest visible).
+		if !strings.Contains(gotBefore, freshSep) {
+			t.Errorf("before: expected fresh separator, got %q", gotBefore)
+		}
+		if !strings.Contains(gotAfter, freshSep) {
+			t.Errorf("after: expected fresh separator, got %q", gotAfter)
+		}
+
+		// After adding Tool3, the fresh separator must appear before Tool2 and Tool1
+		// (Tool3 is at index 0, so freshSep sits between Tool3 and Tool2).
+		freshIdxAfter := strings.Index(gotAfter, freshSep)
+		tool2IdxAfter := strings.Index(gotAfter, "Tool2")
+		if freshIdxAfter < 0 || tool2IdxAfter < 0 {
+			t.Fatalf("after: missing fresh separator or Tool2 in %q", gotAfter)
+		}
+		if freshIdxAfter > tool2IdxAfter {
+			t.Errorf("after: fresh separator (pos %d) should precede Tool2 (pos %d)", freshIdxAfter, tool2IdxAfter)
+		}
+	})
+}
+
 // TestTools_MaxToolsBufferSizeRecommendation documents the spec 5 analysis.
 //
 // Recommendation: keep maxTools=20 as a look-back buffer rather than reducing
