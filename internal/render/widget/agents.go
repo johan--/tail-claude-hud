@@ -35,7 +35,10 @@ func Agents(ctx *model.RenderContext, cfg *config.Config) string {
 	for _, a := range agents {
 		if a.Status == "running" {
 			running = append(running, a)
-		} else {
+		} else if a.DurationMs >= 1000 {
+			// Only show completed agents that ran for >= 1s.
+			// Sub-second agents are noise — they completed before
+			// the user could notice them.
 			completed = append(completed, a)
 		}
 	}
