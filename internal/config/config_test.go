@@ -312,6 +312,116 @@ func TestDefaultEnvWidgetAbsent(t *testing.T) {
 	}
 }
 
+// TestDefaultThemeIsResolved verifies that LoadHud populates ResolvedTheme
+// from the default theme when no config file is present.
+func TestDefaultThemeIsResolved(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+
+	cfg := LoadHud()
+	if cfg.ResolvedTheme == nil {
+		t.Fatal("ResolvedTheme is nil after LoadHud with no config file")
+	}
+	// Default theme should include entries for all standard widgets.
+	for _, w := range []string{"model", "context", "git", "tools", "agents"} {
+		if _, ok := cfg.ResolvedTheme[w]; !ok {
+			t.Errorf("ResolvedTheme missing entry for widget %q", w)
+		}
+	}
+}
+
+// TestThemeSelectionViaConfig verifies that style.theme = "nord" loads the
+// nord built-in theme into ResolvedTheme.
+func TestThemeSelectionViaConfig(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+
+	dir := filepath.Join(tmp, ".config", "tail-claude-hud")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	writeConfig(t, dir, `
+[style]
+theme = "nord"
+`)
+
+	cfg := LoadHud()
+
+	if cfg.Style.Theme != "nord" {
+		t.Errorf("Style.Theme: got %q, want %q", cfg.Style.Theme, "nord")
+	}
+
+	// Nord model entry should differ from default.
+	if cfg.ResolvedTheme["model"].Bg == "" {
+		t.Error("nord theme: model Bg should be non-empty")
+	}
+}
+
+// TestThemeCustomOverridesMerge verifies that [theme.overrides] entries
+// override the selected built-in theme while non-overridden entries remain.
+func TestThemeCustomOverridesMerge(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+
+	dir := filepath.Join(tmp, ".config", "tail-claude-hud")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	writeConfig(t, dir, `
+[style]
+theme = "nord"
+
+[theme.overrides.model]
+fg = "#ff0000"
+bg = "#0000ff"
+`)
+
+	cfg := LoadHud()
+
+	// The override should replace nord's model colors.
+	if cfg.ResolvedTheme["model"].Fg != "#ff0000" {
+		t.Errorf("override model Fg: got %q, want %q", cfg.ResolvedTheme["model"].Fg, "#ff0000")
+	}
+	if cfg.ResolvedTheme["model"].Bg != "#0000ff" {
+		t.Errorf("override model Bg: got %q, want %q", cfg.ResolvedTheme["model"].Bg, "#0000ff")
+	}
+
+	// Other entries from nord must be present and unchanged.
+	nordGitBg := "#3b4252"
+	if cfg.ResolvedTheme["git"].Bg != nordGitBg {
+		t.Errorf("non-overridden git Bg: got %q, want %q", cfg.ResolvedTheme["git"].Bg, nordGitBg)
+	}
+}
+
+// TestUnknownThemeFallsBackToDefault verifies that an unrecognized theme name
+// causes ResolvedTheme to contain the default theme's colors.
+func TestUnknownThemeFallsBackToDefault(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+
+	dir := filepath.Join(tmp, ".config", "tail-claude-hud")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	writeConfig(t, dir, `
+[style]
+theme = "nonexistent-theme-xyz"
+`)
+
+	cfg := LoadHud()
+
+	if cfg.ResolvedTheme == nil {
+		t.Fatal("ResolvedTheme is nil for unknown theme")
+	}
+	// Should still have model entry (from default fallback).
+	if _, ok := cfg.ResolvedTheme["model"]; !ok {
+		t.Error("fallback ResolvedTheme missing 'model' entry")
+	}
+}
+
 // assertWidgets fails the test if got and want differ in length or content.
 func assertWidgets(t *testing.T, got, want []string) {
 	t.Helper()

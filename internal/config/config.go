@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/BurntSushi/toml"
+	"github.com/kylesnowschwartz/tail-claude-hud/internal/theme"
 )
 
 // Line represents a single rendered row in the statusline.
@@ -45,6 +46,7 @@ type Config struct {
 		Separator  string `toml:"separator"`
 		Icons      string `toml:"icons"`
 		ColorLevel string `toml:"color_level"`
+		Theme      string `toml:"theme"`
 		Colors     struct {
 			Context  string `toml:"context"`
 			Warning  string `toml:"warning"`
@@ -65,6 +67,18 @@ type Config struct {
 		// shifts to critical color. Default: 10.00.
 		CostCritical float64 `toml:"cost_critical"`
 	} `toml:"thresholds"`
+
+	// Theme holds the raw TOML overrides from [theme.overrides].
+	// Each key is a widget name; the value has optional fg and bg fields.
+	// After loading, ResolvedTheme is populated from Style.Theme + Theme.Overrides.
+	Theme struct {
+		Overrides map[string]theme.WidgetColors `toml:"overrides"`
+	} `toml:"theme"`
+
+	// ResolvedTheme is the effective per-widget color map after merging the
+	// selected built-in theme with any custom [theme.overrides].
+	// Populated by resolveTheme() during LoadHud. Not read from TOML directly.
+	ResolvedTheme theme.Theme `toml:"-"`
 }
 
 // defaults returns a Config pre-populated with all default values.
@@ -96,6 +110,7 @@ func defaults() *Config {
 	cfg.Style.Separator = " | "
 	cfg.Style.Icons = "nerdfont"
 	cfg.Style.ColorLevel = "auto"
+	cfg.Style.Theme = "default"
 
 	cfg.Style.Colors.Context = "green"
 	cfg.Style.Colors.Warning = "yellow"
@@ -107,6 +122,18 @@ func defaults() *Config {
 	cfg.Thresholds.CostCritical = 10.00
 
 	return cfg
+}
+
+// resolveTheme populates cfg.ResolvedTheme by loading the named built-in theme
+// and merging any custom [theme.overrides] on top of it. Called after the TOML
+// decode so that both built-in selection and user overrides are captured.
+func resolveTheme(cfg *Config) {
+	base := theme.Load(cfg.Style.Theme)
+	if len(cfg.Theme.Overrides) > 0 {
+		cfg.ResolvedTheme = theme.MergeOverrides(base, cfg.Theme.Overrides)
+	} else {
+		cfg.ResolvedTheme = base
+	}
 }
 
 // configPath returns the first config file path that exists, checking XDG
@@ -141,11 +168,13 @@ func LoadHud() *Config {
 
 	path := configPath()
 	if path == "" {
+		resolveTheme(cfg)
 		return cfg
 	}
 
 	data, err := os.ReadFile(path)
 	if err != nil {
+		resolveTheme(cfg)
 		return cfg
 	}
 
@@ -154,8 +183,10 @@ func LoadHud() *Config {
 	// BurntSushi/toml does not zero out unmentioned struct fields, so this
 	// overlay pattern is safe.
 	if _, err := toml.Decode(string(data), cfg); err != nil {
+		resolveTheme(cfg)
 		return cfg
 	}
 
+	resolveTheme(cfg)
 	return cfg
 }

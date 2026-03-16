@@ -57,7 +57,7 @@ func Render(w io.Writer, ctx *model.RenderContext, cfg *config.Config) {
 			if result.IsEmpty() {
 				continue
 			}
-			s := applyWidgetStyle(result)
+			s := applyWidgetStyle(result, name, cfg)
 			parts = append(parts, s)
 		}
 		if len(parts) == 0 {
@@ -80,18 +80,39 @@ func Render(w io.Writer, ctx *model.RenderContext, cfg *config.Config) {
 	}
 }
 
-// applyWidgetStyle converts a WidgetResult to a styled string.
+// applyWidgetStyle converts a WidgetResult to a styled string, incorporating
+// theme colors from the resolved config theme map.
+//
+// Color precedence (highest to lowest):
+//  1. WidgetResult.FgColor / WidgetResult.BgColor — explicit per-render override
+//  2. cfg.ResolvedTheme[widgetName].Fg / .Bg — theme default for this widget
+//  3. Widget's own pre-styled ANSI output (FgColor == "" and no theme bg)
 //
 // When FgColor is empty the Text is returned as-is (the widget pre-styled it
-// internally). When FgColor is set, a fresh lipgloss.Style is built from
-// FgColor (and optionally BgColor) and applied to Text.
-func applyWidgetStyle(r widget.WidgetResult) string {
-	if r.FgColor == "" {
-		return r.Text
+// internally), unless a theme BgColor applies in which case the text is wrapped
+// with that background. When FgColor is set, a fresh lipgloss.Style is built
+// from FgColor and the resolved BgColor (widget > theme) and applied to Text.
+func applyWidgetStyle(r widget.WidgetResult, widgetName string, cfg *config.Config) string {
+	// Resolve background: widget result takes precedence over theme.
+	bgColor := r.BgColor
+	if bgColor == "" {
+		if colors, ok := cfg.ResolvedTheme[widgetName]; ok {
+			bgColor = colors.Bg
+		}
 	}
+
+	if r.FgColor == "" {
+		// Pre-styled output: only apply bg if theme provides one.
+		if bgColor == "" {
+			return r.Text
+		}
+		return lipgloss.NewStyle().Background(lipgloss.Color(bgColor)).Render(r.Text)
+	}
+
+	// Structured output: build full style from fg + resolved bg.
 	style := lipgloss.NewStyle().Foreground(lipgloss.Color(r.FgColor))
-	if r.BgColor != "" {
-		style = style.Background(lipgloss.Color(r.BgColor))
+	if bgColor != "" {
+		style = style.Background(lipgloss.Color(bgColor))
 	}
 	return style.Render(r.Text)
 }

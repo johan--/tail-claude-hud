@@ -76,7 +76,7 @@ ahead_behind = true
 # Show per-file change statistics.
 file_stats = false
 
-# Style — controls separators, icons, and colour thresholds.
+# Style — controls separators, icons, colour thresholds, and theme.
 [style]
 # String rendered between widgets on each line.
 separator = " | "
@@ -85,6 +85,10 @@ icons = "nerdfont"
 # Color depth: "auto" detects from the environment (COLORTERM, TERM_PROGRAM, TERM).
 # Override with "truecolor", "256", or "basic" to force a specific level.
 color_level = "auto"
+# Color theme: "default", "dark", "nord", "gruvbox", "tokyo-night", "rose-pine".
+# The theme sets fg/bg colors for each widget. Use [theme.overrides] to
+# override individual widget colors on top of the selected theme.
+theme = "default"
 
 [style.colors]
 # Colour for normal context usage.
@@ -110,6 +114,17 @@ context_critical = 85
 cost_warning = 5.00
 # Session cost in USD at which the cost widget shifts to critical color.
 cost_critical = 10.00
+
+# Theme overrides — per-widget color customisation on top of style.theme.
+# Each key is a widget name. fg and bg accept CSS hex (#rrggbb) or ANSI
+# 256-color numbers ("75"). Omit either field to keep the theme's default.
+#
+# Example: make the git widget use a deep navy background with white text:
+#   [theme.overrides.git]
+#   fg = "#ffffff"
+#   bg = "#0a1628"
+#
+# [theme.overrides]
 
 [extra]
 # Uncomment to run a shell command and append its output to the statusline.
