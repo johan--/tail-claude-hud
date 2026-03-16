@@ -486,22 +486,24 @@ type extractionSnapshot struct {
 }
 
 type snapshotTool struct {
-	ID         string `json:"id,omitempty"` // tool_use ID; needed to correlate tool_result across invocations
+	ID         string `json:"id,omitempty"`         // tool_use ID; needed to correlate tool_result across invocations
 	Name       string `json:"name"`
 	Target     string `json:"target"`
 	Category   string `json:"category"`
 	Completed  bool   `json:"completed"`
 	HasError   bool   `json:"has_error"`
 	DurationMs int    `json:"duration_ms"`
+	StartTime  string `json:"start_time,omitempty"` // RFC3339Nano; enables duration computation after restore
 }
 
 type snapshotAgent struct {
-	ID          string `json:"id,omitempty"` // tool_use ID; needed to correlate tool_result across invocations
+	ID          string `json:"id,omitempty"`         // tool_use ID; needed to correlate tool_result across invocations
 	AgentType   string `json:"agent_type"`
 	Model       string `json:"model"`
 	Description string `json:"description"`
 	Status      string `json:"status"`
 	DurationMs  int    `json:"duration_ms"`
+	StartTime   string `json:"start_time,omitempty"` // RFC3339Nano; enables duration computation after restore
 }
 
 // MarshalSnapshot serializes the display-relevant state to JSON. It omits
@@ -510,7 +512,7 @@ type snapshotAgent struct {
 func (es *ExtractionState) MarshalSnapshot() (json.RawMessage, error) {
 	tools := make([]snapshotTool, 0, len(es.displayTools))
 	for _, t := range es.displayTools {
-		tools = append(tools, snapshotTool{
+		st := snapshotTool{
 			ID:         t.id,
 			Name:       t.name,
 			Target:     t.target,
@@ -518,19 +520,27 @@ func (es *ExtractionState) MarshalSnapshot() (json.RawMessage, error) {
 			Completed:  t.completed,
 			HasError:   t.hasError,
 			DurationMs: t.durationMs,
-		})
+		}
+		if !t.startTime.IsZero() {
+			st.StartTime = t.startTime.Format(time.RFC3339Nano)
+		}
+		tools = append(tools, st)
 	}
 
 	agents := make([]snapshotAgent, 0, len(es.displayAgents))
 	for _, a := range es.displayAgents {
-		agents = append(agents, snapshotAgent{
+		sa := snapshotAgent{
 			ID:          a.id,
 			AgentType:   a.agentType,
 			Model:       a.model,
 			Description: a.description,
 			Status:      a.status,
 			DurationMs:  a.durationMs,
-		})
+		}
+		if !a.startTime.IsZero() {
+			sa.StartTime = a.startTime.Format(time.RFC3339Nano)
+		}
+		agents = append(agents, sa)
 	}
 
 	todos := make([]model.TodoItem, len(es.Todos))
@@ -571,6 +581,11 @@ func (es *ExtractionState) UnmarshalSnapshot(data json.RawMessage) error {
 			hasError:   st.HasError,
 			durationMs: st.DurationMs,
 		}
+		if st.StartTime != "" {
+			if parsed, err := time.Parse(time.RFC3339Nano, st.StartTime); err == nil {
+				t.startTime = parsed
+			}
+		}
 		es.displayTools = append(es.displayTools, t)
 		// Rebuild toolMap for non-completed tools so their tool_result can be
 		// matched in the next incremental read.
@@ -588,6 +603,11 @@ func (es *ExtractionState) UnmarshalSnapshot(data json.RawMessage) error {
 			description: sa.Description,
 			status:      sa.Status,
 			durationMs:  sa.DurationMs,
+		}
+		if sa.StartTime != "" {
+			if parsed, err := time.Parse(time.RFC3339Nano, sa.StartTime); err == nil {
+				a.startTime = parsed
+			}
 		}
 		es.displayAgents = append(es.displayAgents, a)
 		// Rebuild agentMap for running agents so their tool_result can complete them.
