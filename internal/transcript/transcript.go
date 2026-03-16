@@ -19,6 +19,12 @@ type Entry struct {
 	Timestamp string `json:"timestamp"`
 	Slug      string `json:"slug"`
 
+	// IsSidechain is true when this entry originates from an agent subprocess
+	// rather than the main conversation thread. Sidechain entries represent
+	// internal activity of sub-agents and must be filtered out before processing
+	// to avoid double-counting tool calls and agent launches.
+	IsSidechain bool `json:"isSidechain"`
+
 	// CustomTitle is populated when Type is "custom-title".
 	CustomTitle string `json:"customTitle"`
 

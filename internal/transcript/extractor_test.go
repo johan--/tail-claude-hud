@@ -2061,3 +2061,58 @@ func TestLastSeenToolCount_NoSnapshot(t *testing.T) {
 		t.Errorf("FreshBoundaryCount = %d, want 0 (no prior snapshot)", data.FreshBoundaryCount)
 	}
 }
+
+// ---- Sidechain filtering ---------------------------------------------------
+
+// TestProcessEntry_SidechainEntriesSkipped verifies that entries with
+// IsSidechain=true are ignored entirely. Sidechain entries come from agent
+// subprocesses and must not contribute tools, agents, or thinking state to
+// the main session display.
+func TestProcessEntry_SidechainEntriesSkipped(t *testing.T) {
+	es := NewExtractionState()
+	e := makeToolUseEntry("sidechain-1", "Read", map[string]interface{}{"file_path": "x.go"})
+	e.IsSidechain = true
+	es.ProcessEntry(e)
+
+	data := es.ToTranscriptData()
+	if len(data.Tools) != 0 {
+		t.Errorf("expected 0 tools from sidechain entry, got %d", len(data.Tools))
+	}
+}
+
+// TestProcessEntry_SidechainAgentEntriesSkipped verifies that a sidechain
+// Task/Agent tool_use is not added to the agents display list.
+func TestProcessEntry_SidechainAgentEntriesSkipped(t *testing.T) {
+	es := NewExtractionState()
+	e := makeToolUseEntry("sidechain-agent-1", "Task", map[string]interface{}{
+		"description": "sub-agent work",
+	})
+	e.IsSidechain = true
+	es.ProcessEntry(e)
+
+	data := es.ToTranscriptData()
+	if len(data.Agents) != 0 {
+		t.Errorf("expected 0 agents from sidechain entry, got %d", len(data.Agents))
+	}
+}
+
+// TestProcessEntry_NonSidechainStillProcessed verifies that a normal (non-sidechain)
+// entry continues to be processed after the sidechain filter is in place.
+func TestProcessEntry_NonSidechainStillProcessed(t *testing.T) {
+	es := NewExtractionState()
+
+	sidechain := makeToolUseEntry("sidechain-1", "Read", map[string]interface{}{"file_path": "sidechain.go"})
+	sidechain.IsSidechain = true
+	es.ProcessEntry(sidechain)
+
+	main := makeToolUseEntry("main-1", "Write", map[string]interface{}{"file_path": "main.go"})
+	es.ProcessEntry(main)
+
+	data := es.ToTranscriptData()
+	if len(data.Tools) != 1 {
+		t.Fatalf("expected 1 tool (non-sidechain only), got %d", len(data.Tools))
+	}
+	if data.Tools[0].Name != "Write" {
+		t.Errorf("expected tool name Write, got %q", data.Tools[0].Name)
+	}
+}

@@ -118,6 +118,13 @@ func (es *ExtractionState) IncrementSpinnerFrame() {
 // state accordingly. Unknown entry types and malformed blocks are silently
 // ignored — the caller is responsible for feeding entries in order.
 func (es *ExtractionState) ProcessEntry(e Entry) {
+	// Sidechain entries are internal agent activity — not part of the main
+	// conversation thread. Skip them to avoid double-counting tool calls and
+	// agent launches from sub-agent subprocesses.
+	if e.IsSidechain {
+		return
+	}
+
 	// custom-title entries take priority over slug for the session name.
 	if e.Type == "custom-title" && e.CustomTitle != "" {
 		es.sessionName = e.CustomTitle
