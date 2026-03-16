@@ -5,13 +5,9 @@ import (
 	"regexp"
 	"strings"
 
-	"charm.land/lipgloss/v2"
-
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/config"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/model"
 )
-
-var cyanStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("87"))
 
 // reBedrockDate matches Bedrock date suffixes like "-20250514".
 var reBedrockDate = regexp.MustCompile(`-\d{8}$`)
@@ -80,33 +76,20 @@ func normalizeModelName(raw string) string {
 	return slug
 }
 
-// Model renders the model display name in cyan, optionally suffixed with the
-// context window size when cfg.Model.ShowContextSize is true.
+// Model renders the normalized model display name colored by model family.
 // Returns "" when ctx.ModelDisplayName is empty.
 //
 // Raw Bedrock model IDs (e.g. "anthropic.claude-sonnet-4-20250514-v1:0") are
 // normalized to a human-readable name before rendering.
+// The bracket color is determined by ModelFamilyColor: coral for Opus,
+// blue for Sonnet, green for Haiku, and default cyan for unknown models.
 func Model(ctx *model.RenderContext, cfg *config.Config) string {
 	if ctx.ModelDisplayName == "" {
 		return ""
 	}
 
 	name := normalizeModelName(ctx.ModelDisplayName)
+	style := ModelFamilyColor(name)
 
-	if cfg.Model.ShowContextSize && ctx.ContextWindowSize > 0 {
-		name = fmt.Sprintf("%s (%s context)", name, formatTokens(ctx.ContextWindowSize))
-	}
-
-	return cyanStyle.Render(fmt.Sprintf("[%s]", name))
-}
-
-// formatTokens converts a raw token count to a human-readable string.
-func formatTokens(n int) string {
-	if n >= 1_000_000 {
-		return fmt.Sprintf("%.0fM", float64(n)/1_000_000)
-	}
-	if n >= 1_000 {
-		return fmt.Sprintf("%dk", n/1_000)
-	}
-	return fmt.Sprintf("%d", n)
+	return style.Render(fmt.Sprintf("[%s]", name))
 }

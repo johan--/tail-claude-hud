@@ -23,19 +23,20 @@ func TestModelWidget_DisplaysNameInBrackets(t *testing.T) {
 	if !strings.Contains(got, "Opus") {
 		t.Errorf("expected output to contain 'Opus', got %q", got)
 	}
-	if !strings.Contains(got, "200k context") {
-		t.Errorf("expected context size '200k context', got %q", got)
+	// Context size is no longer shown in the model widget.
+	if strings.Contains(got, "context") {
+		t.Errorf("expected no context size in model widget, got %q", got)
 	}
 }
 
-func TestModelWidget_HidesContextSize(t *testing.T) {
+func TestModelWidget_NeverShowsContextSize(t *testing.T) {
+	// Context size is removed from the model widget entirely.
 	ctx := &model.RenderContext{ModelDisplayName: "Sonnet", ContextWindowSize: 200000}
 	cfg := defaultCfg()
-	cfg.Model.ShowContextSize = false
 
 	got := Model(ctx, cfg)
 	if strings.Contains(got, "context") {
-		t.Errorf("expected no context size when disabled, got %q", got)
+		t.Errorf("expected no context size in model widget, got %q", got)
 	}
 	if !strings.Contains(got, "Sonnet") {
 		t.Errorf("expected 'Sonnet' in output, got %q", got)
@@ -675,18 +676,17 @@ func TestIconsFor_Modes(t *testing.T) {
 
 func TestModelWidget_DisplayNameAlreadyHasContext(t *testing.T) {
 	// Claude Code sends display_name as "Opus 4.6 (1M context)".
-	// normalizeModelName strips the parenthesized suffix, then Model
-	// re-adds it in a controlled format — exactly once.
+	// normalizeModelName strips the parenthesized suffix; the model widget
+	// never re-adds context size, so "context" must not appear in output.
 	ctx := &model.RenderContext{
 		ModelDisplayName:  "Opus 4.6 (1M context)",
 		ContextWindowSize: 1000000,
 	}
 	cfg := defaultCfg()
-	cfg.Model.ShowContextSize = true
 
 	got := Model(ctx, cfg)
-	if count := strings.Count(got, "context"); count != 1 {
-		t.Errorf("expected 'context' once, found %d times in %q", count, got)
+	if strings.Contains(got, "context") {
+		t.Errorf("expected no 'context' in output, got %q", got)
 	}
 	if !strings.Contains(got, "Opus 4.6") {
 		t.Errorf("expected 'Opus 4.6' in output, got %q", got)
@@ -803,7 +803,6 @@ func TestModelWidget_NormalizesBedrockID(t *testing.T) {
 		ContextWindowSize: 200000,
 	}
 	cfg := defaultCfg()
-	cfg.Model.ShowContextSize = false
 
 	got := Model(ctx, cfg)
 	if !strings.Contains(got, "Claude Sonnet 4") {
@@ -811,6 +810,57 @@ func TestModelWidget_NormalizesBedrockID(t *testing.T) {
 	}
 	if strings.Contains(got, "anthropic.") {
 		t.Errorf("Model widget: Bedrock prefix should be stripped, got %q", got)
+	}
+}
+
+// -- ModelFamilyColor via Model widget ----------------------------------------
+
+func TestModelWidget_OpusRendersInCoral(t *testing.T) {
+	ctx := &model.RenderContext{ModelDisplayName: "claude-opus-4-6"}
+	cfg := defaultCfg()
+
+	got := Model(ctx, cfg)
+	// Coral is ANSI color 204. Verify the rendered output contains the ANSI sequence.
+	coralStyle := ModelFamilyColor("Claude Opus 4.6")
+	want := coralStyle.Render("[Claude Opus 4.6]")
+	if got != want {
+		t.Errorf("Opus model: expected coral rendering %q, got %q", want, got)
+	}
+}
+
+func TestModelWidget_SonnetRendersInBlue(t *testing.T) {
+	ctx := &model.RenderContext{ModelDisplayName: "claude-sonnet-4-6"}
+	cfg := defaultCfg()
+
+	got := Model(ctx, cfg)
+	blueStyle := ModelFamilyColor("Claude Sonnet 4.6")
+	want := blueStyle.Render("[Claude Sonnet 4.6]")
+	if got != want {
+		t.Errorf("Sonnet model: expected blue rendering %q, got %q", want, got)
+	}
+}
+
+func TestModelWidget_HaikuRendersInGreen(t *testing.T) {
+	ctx := &model.RenderContext{ModelDisplayName: "claude-haiku-3-5"}
+	cfg := defaultCfg()
+
+	got := Model(ctx, cfg)
+	greenStyle := ModelFamilyColor("Claude Haiku 3.5")
+	want := greenStyle.Render("[Claude Haiku 3.5]")
+	if got != want {
+		t.Errorf("Haiku model: expected green rendering %q, got %q", want, got)
+	}
+}
+
+func TestModelWidget_UnknownRendersInCyan(t *testing.T) {
+	ctx := &model.RenderContext{ModelDisplayName: "gpt-4o"}
+	cfg := defaultCfg()
+
+	got := Model(ctx, cfg)
+	cyanStyle := ModelFamilyColor("gpt-4o")
+	want := cyanStyle.Render("[gpt-4o]")
+	if got != want {
+		t.Errorf("Unknown model: expected cyan rendering %q, got %q", want, got)
 	}
 }
 
