@@ -325,23 +325,23 @@ func TestToolsWidget_RunningToolShowsCategoryIconAndName(t *testing.T) {
 	}
 }
 
-func TestToolsWidget_RunningToolShowsBrailleSpinner(t *testing.T) {
+func TestToolsWidget_RunningToolShowsYellowIconNoSpinner(t *testing.T) {
 	ctx := &model.RenderContext{Transcript: &model.TranscriptData{
 		Tools: []model.ToolEntry{{Name: "Bash", Count: 0, Category: "shell"}},
 	}}
 	cfg := defaultCfg()
+	cfg.Style.Icons = "ascii"
 
 	got := Tools(ctx, cfg)
-	// Should contain one of the braille spinner frames.
-	hasBraille := false
+	if !strings.Contains(got, "Bash") {
+		t.Errorf("Running tool should contain name 'Bash', got %q", got)
+	}
+	// Should NOT contain braille spinner frames.
 	for _, frame := range brailleFrames {
 		if strings.Contains(got, frame) {
-			hasBraille = true
+			t.Errorf("Running tool should not have braille spinner, got %q", got)
 			break
 		}
-	}
-	if !hasBraille {
-		t.Errorf("Running tool should show braille spinner, got %q", got)
 	}
 }
 
@@ -369,7 +369,7 @@ func TestToolsWidget_CompletedToolShowsDimCategoryIconAndDuration(t *testing.T) 
 }
 
 // Spec 10: error tool renders with red error icon + name + "err".
-func TestToolsWidget_ErrorToolShowsErrorIconAndSuffix(t *testing.T) {
+func TestToolsWidget_ErrorToolShowsRedCategoryIcon(t *testing.T) {
 	ctx := &model.RenderContext{Transcript: &model.TranscriptData{
 		Tools: []model.ToolEntry{{Name: "Bash", Count: 1, Category: "shell", DurationMs: 500, HasError: true}},
 	}}
@@ -378,11 +378,9 @@ func TestToolsWidget_ErrorToolShowsErrorIconAndSuffix(t *testing.T) {
 
 	got := Tools(ctx, cfg)
 	icons := IconsFor("ascii")
-	if !strings.Contains(got, icons.Error) {
-		t.Errorf("Tools error: expected error icon %q, got %q", icons.Error, got)
-	}
-	if !strings.Contains(got, "err") {
-		t.Errorf("Tools error: expected 'err' suffix, got %q", got)
+	// Error uses category icon (not error icon) in red.
+	if !strings.Contains(got, icons.Shell) {
+		t.Errorf("Tools error: expected shell icon %q, got %q", icons.Shell, got)
 	}
 	if !strings.Contains(got, "Bash") {
 		t.Errorf("Tools error: expected tool name 'Bash', got %q", got)

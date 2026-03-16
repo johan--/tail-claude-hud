@@ -64,24 +64,22 @@ func renderToolEntry(icons Icons, t model.ToolEntry) string {
 	catIcon := CategoryIcon(icons, t.Category)
 
 	if t.Count == 0 {
-		// Running: yellow category icon + name + braille spinner.
+		// Running: yellow category icon + name.
 		icon := yellowStyle.Render(catIcon)
 		name := yellowStyle.Render(t.Name)
-		spinner := spinnerFrame()
-		return fmt.Sprintf("%s %s %s", icon, name, yellowStyle.Render(spinner))
+		return fmt.Sprintf("%s %s", icon, name)
 	}
 
 	if t.HasError {
-		// Error: red error icon + name + duration + "err".
-		icon := redStyle.Render(icons.Error)
+		// Error: red category icon + name + duration.
+		icon := redStyle.Render(catIcon)
 		name := redStyle.Render(t.Name)
 		dur := redStyle.Render(formatDuration(t.DurationMs))
-		suffix := redStyle.Render("err")
-		return fmt.Sprintf("%s %s %s %s", icon, name, dur, suffix)
+		return fmt.Sprintf("%s %s %s", icon, name, dur)
 	}
 
-	// Completed: dim category icon + name + duration.
-	icon := dimStyle.Render(catIcon)
+	// Completed: green category icon + name + duration.
+	icon := greenStyle.Render(catIcon)
 	name := dimStyle.Render(t.Name)
 	dur := dimStyle.Render(formatDuration(t.DurationMs))
 	return fmt.Sprintf("%s %s %s", icon, name, dur)
