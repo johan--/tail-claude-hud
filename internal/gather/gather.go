@@ -112,7 +112,7 @@ func needsTranscript(active map[string]bool) bool {
 }
 
 // gatherTranscript runs the full transcript pipeline for the given path:
-// incremental read → parse → extract → return TranscriptData.
+// restore snapshot → incremental read → parse → extract → save snapshot → return TranscriptData.
 // Returns nil on any error so callers treat missing data gracefully.
 func gatherTranscript(path string) *model.TranscriptData {
 	sm := transcript.NewStateManager(transcriptStateDir())
@@ -122,6 +122,12 @@ func gatherTranscript(path string) *model.TranscriptData {
 	}
 
 	es := transcript.NewExtractionState()
+	// Restore previous display state so completed tools/agents remain visible
+	// across invocations. The snapshot is nil on first run or after a reset.
+	if snap := sm.LoadSnapshot(); snap != nil {
+		_ = es.UnmarshalSnapshot(snap)
+	}
+
 	for _, line := range lines {
 		e, err := transcript.ParseEntry([]byte(line))
 		if err != nil {
@@ -133,6 +139,10 @@ func gatherTranscript(path string) *model.TranscriptData {
 	td := es.ToTranscriptData()
 	td.Path = path
 
+	// Persist the updated extraction state alongside the byte offset.
+	if snap, err := es.MarshalSnapshot(); err == nil {
+		sm.SetSnapshot(snap)
+	}
 	_ = sm.SaveState(path)
 	return td
 }

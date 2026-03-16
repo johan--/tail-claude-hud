@@ -14,16 +14,19 @@ import (
 
 // stateFile is the JSON structure persisted to disk.
 type stateFile struct {
-	TranscriptPath string `json:"transcript_path"`
-	ByteOffset     int64  `json:"byte_offset"`
-	SessionStart   string `json:"session_start"` // RFC3339, informational
+	TranscriptPath     string          `json:"transcript_path"`
+	ByteOffset         int64           `json:"byte_offset"`
+	SessionStart       string          `json:"session_start"` // RFC3339, informational
+	ExtractionSnapshot json.RawMessage `json:"extraction_snapshot,omitempty"`
 }
 
 // StateManager handles byte-offset tracking for incremental reads.
 type StateManager struct {
-	stateDir string
-	offset   int64
-	lastPath string
+	stateDir         string
+	offset           int64
+	lastPath         string
+	snapshot         json.RawMessage // set by SetSnapshot; included in next SaveState
+	loadedSnapshot   json.RawMessage // loaded from disk by loadState; returned by LoadSnapshot
 }
 
 // NewStateManager creates a manager using the given directory for state files.
@@ -46,16 +49,33 @@ func (sm *StateManager) stateFilePath(transcriptPath string) string {
 
 // loadState reads and parses the state file. Returns zero-value stateFile if
 // the file is missing or contains invalid JSON (spec: start from byte 0).
+// As a side-effect it stores the extraction_snapshot in sm.loadedSnapshot so
+// callers can retrieve it via LoadSnapshot after calling ReadIncremental.
 func (sm *StateManager) loadState(transcriptPath string) stateFile {
 	data, err := os.ReadFile(sm.stateFilePath(transcriptPath))
 	if err != nil {
+		sm.loadedSnapshot = nil
 		return stateFile{}
 	}
 	var sf stateFile
 	if json.Unmarshal(data, &sf) != nil {
+		sm.loadedSnapshot = nil
 		return stateFile{}
 	}
+	sm.loadedSnapshot = sf.ExtractionSnapshot
 	return sf
+}
+
+// LoadSnapshot returns the extraction snapshot that was loaded from disk during
+// the most recent ReadIncremental call. Returns nil when no snapshot is
+// available (e.g., first run, corrupt state, or path mismatch).
+func (sm *StateManager) LoadSnapshot() json.RawMessage {
+	return sm.loadedSnapshot
+}
+
+// SetSnapshot stores data so it will be included in the next SaveState call.
+func (sm *StateManager) SetSnapshot(data json.RawMessage) {
+	sm.snapshot = data
 }
 
 // ReadIncremental reads new lines from the transcript since the last read.
@@ -83,11 +103,15 @@ func (sm *StateManager) ReadIncremental(transcriptPath string) ([]string, error)
 			return nil, err
 		}
 		if sf.ByteOffset > fi.Size() {
-			// Truncated transcript: reset to beginning.
+			// Truncated transcript: reset to beginning and discard snapshot.
 			startOffset = 0
+			sm.loadedSnapshot = nil
 		} else {
 			startOffset = sf.ByteOffset
 		}
+	} else if sf.TranscriptPath != "" && sf.TranscriptPath != transcriptPath {
+		// Path mismatch (new session): discard snapshot.
+		sm.loadedSnapshot = nil
 	}
 
 	if _, err := f.Seek(startOffset, io.SeekStart); err != nil {
@@ -180,8 +204,9 @@ func (sm *StateManager) SaveState(transcriptPath string) error {
 	}
 
 	sf := stateFile{
-		TranscriptPath: transcriptPath,
-		ByteOffset:     sm.offset,
+		TranscriptPath:     transcriptPath,
+		ByteOffset:         sm.offset,
+		ExtractionSnapshot: sm.snapshot,
 	}
 
 	data, err := json.Marshal(sf)

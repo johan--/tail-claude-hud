@@ -953,3 +953,163 @@ func TestThinking_NoThinkingBlocks_ActiveFalse(t *testing.T) {
 		t.Errorf("expected ThinkingCount=0, got %d", data.ThinkingCount)
 	}
 }
+
+// ---- Snapshot round-trip (spec 6: tools from prior invocation appear after restore) ----
+
+func TestMarshalUnmarshalSnapshot_ToolsRoundTrip(t *testing.T) {
+	// First invocation: process a completed tool.
+	es1 := NewExtractionState()
+	t0 := makeToolUseEntry("id-1", "Read", map[string]interface{}{"file_path": "main.go"})
+	es1.ProcessEntry(t0)
+	es1.ProcessEntry(makeToolResultEntry("id-1", false))
+
+	snap, err := es1.MarshalSnapshot()
+	if err != nil {
+		t.Fatalf("MarshalSnapshot: %v", err)
+	}
+
+	// Second invocation: fresh state, restore snapshot, process new line.
+	es2 := NewExtractionState()
+	if err := es2.UnmarshalSnapshot(snap); err != nil {
+		t.Fatalf("UnmarshalSnapshot: %v", err)
+	}
+	// Process a new tool in the second invocation.
+	es2.ProcessEntry(makeToolUseEntry("id-2", "Bash", map[string]interface{}{"command": "ls"}))
+
+	data := es2.ToTranscriptData()
+	if len(data.Tools) != 2 {
+		t.Fatalf("expected 2 tools after restore+new entry, got %d", len(data.Tools))
+	}
+	// The first tool (from snapshot) should be completed.
+	if data.Tools[0].Name != "Read" {
+		t.Errorf("expected restored tool Name=Read, got %q", data.Tools[0].Name)
+	}
+	if data.Tools[0].Count != 1 {
+		t.Errorf("expected restored tool Count=1 (completed), got %d", data.Tools[0].Count)
+	}
+	// The second tool (new) should be running.
+	if data.Tools[1].Name != "Bash" {
+		t.Errorf("expected new tool Name=Bash, got %q", data.Tools[1].Name)
+	}
+	if data.Tools[1].Count != 0 {
+		t.Errorf("expected new tool Count=0 (running), got %d", data.Tools[1].Count)
+	}
+}
+
+func TestMarshalUnmarshalSnapshot_AgentsRoundTrip(t *testing.T) {
+	es1 := NewExtractionState()
+	es1.ProcessEntry(makeToolUseEntry("agent-1", "Task", map[string]interface{}{
+		"subagent_type": "coding",
+		"model":         "claude-haiku",
+		"description":   "Implement feature",
+	}))
+	es1.ProcessEntry(makeToolResultEntry("agent-1", false))
+
+	snap, err := es1.MarshalSnapshot()
+	if err != nil {
+		t.Fatalf("MarshalSnapshot: %v", err)
+	}
+
+	es2 := NewExtractionState()
+	if err := es2.UnmarshalSnapshot(snap); err != nil {
+		t.Fatalf("UnmarshalSnapshot: %v", err)
+	}
+
+	data := es2.ToTranscriptData()
+	if len(data.Agents) != 1 {
+		t.Fatalf("expected 1 agent after restore, got %d", len(data.Agents))
+	}
+	a := data.Agents[0]
+	if a.Name != "coding" {
+		t.Errorf("expected Name=coding, got %q", a.Name)
+	}
+	if a.Model != "claude-haiku" {
+		t.Errorf("expected Model=claude-haiku, got %q", a.Model)
+	}
+	if a.Status != "completed" {
+		t.Errorf("expected Status=completed, got %q", a.Status)
+	}
+}
+
+func TestMarshalUnmarshalSnapshot_TodosRoundTrip(t *testing.T) {
+	es1 := NewExtractionState()
+	todos := []map[string]interface{}{
+		{"id": "t1", "content": "Buy milk", "status": "pending"},
+		{"id": "t2", "content": "Write tests", "status": "completed"},
+	}
+	es1.ProcessEntry(makeToolUseEntry("tw-1", "TodoWrite", map[string]interface{}{
+		"todos": todos,
+	}))
+
+	snap, err := es1.MarshalSnapshot()
+	if err != nil {
+		t.Fatalf("MarshalSnapshot: %v", err)
+	}
+
+	es2 := NewExtractionState()
+	if err := es2.UnmarshalSnapshot(snap); err != nil {
+		t.Fatalf("UnmarshalSnapshot: %v", err)
+	}
+
+	data := es2.ToTranscriptData()
+	if len(data.Todos) != 2 {
+		t.Fatalf("expected 2 todos after restore, got %d", len(data.Todos))
+	}
+	if data.Todos[0].Content != "Buy milk" {
+		t.Errorf("expected 'Buy milk', got %q", data.Todos[0].Content)
+	}
+	if data.Todos[1].Done != true {
+		t.Error("expected second todo Done=true after restore")
+	}
+}
+
+func TestMarshalUnmarshalSnapshot_SessionNameAndThinking(t *testing.T) {
+	es1 := NewExtractionState()
+	var titleEntry Entry
+	titleEntry.Type = "custom-title"
+	titleEntry.CustomTitle = "My Session"
+	es1.ProcessEntry(titleEntry)
+	es1.ProcessEntry(makeThinkingEntry())
+	es1.ProcessEntry(makeThinkingEntry())
+
+	snap, err := es1.MarshalSnapshot()
+	if err != nil {
+		t.Fatalf("MarshalSnapshot: %v", err)
+	}
+
+	es2 := NewExtractionState()
+	if err := es2.UnmarshalSnapshot(snap); err != nil {
+		t.Fatalf("UnmarshalSnapshot: %v", err)
+	}
+
+	data := es2.ToTranscriptData()
+	if data.SessionName != "My Session" {
+		t.Errorf("expected SessionName=My Session, got %q", data.SessionName)
+	}
+	if data.ThinkingCount != 2 {
+		t.Errorf("expected ThinkingCount=2, got %d", data.ThinkingCount)
+	}
+	if !data.ThinkingActive {
+		t.Error("expected ThinkingActive=true after restore")
+	}
+}
+
+func TestUnmarshalSnapshot_NilData_NoError(t *testing.T) {
+	es := NewExtractionState()
+	if err := es.UnmarshalSnapshot(nil); err != nil {
+		t.Errorf("expected no error for nil snapshot, got %v", err)
+	}
+	// State should remain empty.
+	data := es.ToTranscriptData()
+	if len(data.Tools) != 0 || len(data.Agents) != 0 || len(data.Todos) != 0 {
+		t.Error("expected empty state after nil snapshot restore")
+	}
+}
+
+func TestUnmarshalSnapshot_MalformedData_ReturnsError(t *testing.T) {
+	es := NewExtractionState()
+	err := es.UnmarshalSnapshot(json.RawMessage(`not valid json`))
+	if err == nil {
+		t.Error("expected error for malformed snapshot data")
+	}
+}

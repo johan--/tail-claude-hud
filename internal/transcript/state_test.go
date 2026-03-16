@@ -432,3 +432,132 @@ func TestSplitLines_AllComplete(t *testing.T) {
 		t.Errorf("consumed should equal data length %d, got %d", len(data), consumed)
 	}
 }
+
+// ---- Extraction snapshot persistence (spec 6) ------------------------------
+
+// TestStateManager_SnapshotPersistedAndRestored verifies that a snapshot set
+// via SetSnapshot is written to disk and returned by LoadSnapshot on the next
+// StateManager instance (simulating a new process invocation).
+func TestStateManager_SnapshotPersistedAndRestored(t *testing.T) {
+	dir := t.TempDir()
+	sm1 := NewStateManager(dir)
+
+	transcriptPath := filepath.Join(dir, "t.jsonl")
+	writeLines(t, transcriptPath, []string{jsonLine("a")})
+
+	if _, err := sm1.ReadIncremental(transcriptPath); err != nil {
+		t.Fatal(err)
+	}
+
+	// Simulate an extraction snapshot.
+	snapData := json.RawMessage(`{"tools":[{"name":"Read","target":"main.go","category":"file","completed":true,"has_error":false,"duration_ms":42}],"agents":[],"todos":[],"session_name":"test-session","thinking_active":false,"thinking_count":0}`)
+	sm1.SetSnapshot(snapData)
+
+	if err := sm1.SaveState(transcriptPath); err != nil {
+		t.Fatalf("SaveState: %v", err)
+	}
+
+	// New StateManager (new invocation): load snapshot.
+	sm2 := NewStateManager(dir)
+	appendLines(t, transcriptPath, []string{jsonLine("b")})
+	if _, err := sm2.ReadIncremental(transcriptPath); err != nil {
+		t.Fatal(err)
+	}
+
+	snap := sm2.LoadSnapshot()
+	if snap == nil {
+		t.Fatal("expected snapshot to be loaded, got nil")
+	}
+
+	// Verify snapshot can be unmarshalled and contains the expected tool.
+	var loaded struct {
+		Tools []struct {
+			Name string `json:"name"`
+		} `json:"tools"`
+		SessionName string `json:"session_name"`
+	}
+	if err := json.Unmarshal(snap, &loaded); err != nil {
+		t.Fatalf("unmarshal loaded snapshot: %v", err)
+	}
+	if len(loaded.Tools) != 1 || loaded.Tools[0].Name != "Read" {
+		t.Errorf("expected snapshot to contain Read tool, got %+v", loaded.Tools)
+	}
+	if loaded.SessionName != "test-session" {
+		t.Errorf("expected session_name=test-session, got %q", loaded.SessionName)
+	}
+}
+
+// ---- State resets when transcript path changes (spec 7) --------------------
+
+// TestStateManager_SnapshotClearedOnPathMismatch verifies that LoadSnapshot
+// returns nil when the stored state was for a different transcript path.
+func TestStateManager_SnapshotClearedOnPathMismatch(t *testing.T) {
+	dir := t.TempDir()
+	sm1 := NewStateManager(dir)
+
+	transcriptPath := filepath.Join(dir, "t.jsonl")
+	writeLines(t, transcriptPath, []string{jsonLine("a")})
+	if _, err := sm1.ReadIncremental(transcriptPath); err != nil {
+		t.Fatal(err)
+	}
+
+	sm1.SetSnapshot(json.RawMessage(`{"tools":[],"agents":[],"todos":[],"session_name":"old","thinking_active":false,"thinking_count":0}`))
+	if err := sm1.SaveState(transcriptPath); err != nil {
+		t.Fatal(err)
+	}
+
+	// Write a new transcript at a different path but share the same state dir.
+	// We simulate path mismatch by manually overwriting the state file to point
+	// to a different path (matching the existing TestReadIncremental_DifferentPathResetsToZero pattern).
+	sf := stateFile{
+		TranscriptPath:     "/different/session/transcript.jsonl",
+		ByteOffset:         9999,
+		ExtractionSnapshot: json.RawMessage(`{"session_name":"should-not-appear"}`),
+	}
+	data, _ := json.Marshal(sf)
+	stateFilePath := sm1.stateFilePath(transcriptPath)
+	if err := os.WriteFile(stateFilePath, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	sm2 := NewStateManager(dir)
+	if _, err := sm2.ReadIncremental(transcriptPath); err != nil {
+		t.Fatal(err)
+	}
+
+	snap := sm2.LoadSnapshot()
+	if snap != nil {
+		t.Errorf("expected nil snapshot on path mismatch, got %s", snap)
+	}
+}
+
+// TestStateManager_SnapshotClearedOnTruncation verifies that LoadSnapshot
+// returns nil when the transcript is truncated (new session in same file).
+func TestStateManager_SnapshotClearedOnTruncation(t *testing.T) {
+	dir := t.TempDir()
+	sm1 := NewStateManager(dir)
+
+	transcriptPath := filepath.Join(dir, "t.jsonl")
+	writeLines(t, transcriptPath, []string{jsonLine("a"), jsonLine("b")})
+	if _, err := sm1.ReadIncremental(transcriptPath); err != nil {
+		t.Fatal(err)
+	}
+
+	sm1.SetSnapshot(json.RawMessage(`{"tools":[],"agents":[],"todos":[],"session_name":"old-session","thinking_active":false,"thinking_count":0}`))
+	if err := sm1.SaveState(transcriptPath); err != nil {
+		t.Fatal(err)
+	}
+
+	// Truncate (new session replacing old file).
+	writeLines(t, transcriptPath, []string{jsonLine("fresh")})
+
+	sm2 := NewStateManager(dir)
+	if _, err := sm2.ReadIncremental(transcriptPath); err != nil {
+		t.Fatal(err)
+	}
+
+	snap := sm2.LoadSnapshot()
+	if snap != nil {
+		t.Errorf("expected nil snapshot after truncation, got %s", snap)
+	}
+}

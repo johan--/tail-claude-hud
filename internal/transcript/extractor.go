@@ -466,6 +466,128 @@ func normalizeStatusDone(status string) bool {
 	}
 }
 
+// extractionSnapshot is the serializable form of ExtractionState for persistence.
+// StartTime is intentionally excluded — it is only meaningful within a single
+// invocation for elapsed-time computation. Restored entries use DurationMs directly.
+type extractionSnapshot struct {
+	Tools          []snapshotTool   `json:"tools"`
+	Agents         []snapshotAgent  `json:"agents"`
+	Todos          []model.TodoItem `json:"todos"`
+	SessionName    string           `json:"session_name"`
+	ThinkingActive bool             `json:"thinking_active"`
+	ThinkingCount  int              `json:"thinking_count"`
+}
+
+type snapshotTool struct {
+	Name       string `json:"name"`
+	Target     string `json:"target"`
+	Category   string `json:"category"`
+	Completed  bool   `json:"completed"`
+	HasError   bool   `json:"has_error"`
+	DurationMs int    `json:"duration_ms"`
+}
+
+type snapshotAgent struct {
+	AgentType   string `json:"agent_type"`
+	Model       string `json:"model"`
+	Description string `json:"description"`
+	Status      string `json:"status"`
+	DurationMs  int    `json:"duration_ms"`
+}
+
+// MarshalSnapshot serializes the display-relevant state to JSON. It omits
+// toolMap and agentMap because in-flight tool_use→tool_result correlations
+// do not span invocations.
+func (es *ExtractionState) MarshalSnapshot() (json.RawMessage, error) {
+	tools := make([]snapshotTool, 0, len(es.displayTools))
+	for _, t := range es.displayTools {
+		tools = append(tools, snapshotTool{
+			Name:       t.name,
+			Target:     t.target,
+			Category:   t.category,
+			Completed:  t.completed,
+			HasError:   t.hasError,
+			DurationMs: t.durationMs,
+		})
+	}
+
+	agents := make([]snapshotAgent, 0, len(es.displayAgents))
+	for _, a := range es.displayAgents {
+		agents = append(agents, snapshotAgent{
+			AgentType:   a.agentType,
+			Model:       a.model,
+			Description: a.description,
+			Status:      a.status,
+			DurationMs:  a.durationMs,
+		})
+	}
+
+	todos := make([]model.TodoItem, len(es.Todos))
+	copy(todos, es.Todos)
+
+	snap := extractionSnapshot{
+		Tools:          tools,
+		Agents:         agents,
+		Todos:          todos,
+		SessionName:    es.sessionName,
+		ThinkingActive: es.thinkingActive,
+		ThinkingCount:  es.thinkingCount,
+	}
+	return json.Marshal(snap)
+}
+
+// UnmarshalSnapshot restores display state from a previously serialized snapshot.
+// The toolMap and agentMap are not restored (in-flight correlations don't survive
+// across invocations). Restored tools have no startTime, so duration won't be
+// recomputed — DurationMs retains its final value from the snapshot.
+func (es *ExtractionState) UnmarshalSnapshot(data json.RawMessage) error {
+	if len(data) == 0 {
+		return nil
+	}
+	var snap extractionSnapshot
+	if err := json.Unmarshal(data, &snap); err != nil {
+		return err
+	}
+
+	es.displayTools = make([]*internalTool, 0, len(snap.Tools))
+	for _, st := range snap.Tools {
+		es.displayTools = append(es.displayTools, &internalTool{
+			name:       st.Name,
+			target:     st.Target,
+			category:   st.Category,
+			completed:  st.Completed,
+			hasError:   st.HasError,
+			durationMs: st.DurationMs,
+		})
+	}
+
+	es.displayAgents = make([]*internalAgent, 0, len(snap.Agents))
+	for _, sa := range snap.Agents {
+		es.displayAgents = append(es.displayAgents, &internalAgent{
+			agentType:   sa.AgentType,
+			model:       sa.Model,
+			description: sa.Description,
+			status:      sa.Status,
+			durationMs:  sa.DurationMs,
+		})
+	}
+
+	if snap.Todos != nil {
+		es.Todos = snap.Todos
+		es.taskIDIndex = make(map[string]int)
+		for i, item := range es.Todos {
+			if item.ID != "" {
+				es.taskIDIndex[item.ID] = i
+			}
+		}
+	}
+
+	es.sessionName = snap.SessionName
+	es.thinkingActive = snap.ThinkingActive
+	es.thinkingCount = snap.ThinkingCount
+	return nil
+}
+
 // isNumericString reports whether s is a non-empty string of ASCII digits.
 func isNumericString(s string) bool {
 	if s == "" {
