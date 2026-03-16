@@ -135,6 +135,11 @@ func Context(ctx *model.RenderContext, cfg *config.Config) string {
 		result = activeStyle.Render(label)
 	}
 
+	// Prepend a circle-slice Nerd Font icon that fills proportionally with usage.
+	if cfg.Style.Icons == "nerdfont" {
+		result = percentToIcon(pct) + result
+	}
+
 	// Append token breakdown when context exceeds the critical threshold and breakdown is enabled.
 	if pct > critAt && cfg.Context.ShowBreakdown {
 		breakdown := fmt.Sprintf(" in:%s cr:%s rd:%s",

@@ -1548,10 +1548,12 @@ func TestContextWidget_AtCriticalThresholdUsesCriticalColor(t *testing.T) {
 func TestContextWidget_AboveCriticalThresholdUsesCriticalColor(t *testing.T) {
 	// Above critical (95%) should use the same critical color as at 85%.
 	// Disable breakdown so both render as a simple percent label with no suffix.
+	// Use ascii icons so circle-slice icons don't vary between percent values.
 	ctx95 := &model.RenderContext{ContextPercent: 95, ContextWindowSize: 200000}
 	ctx85 := &model.RenderContext{ContextPercent: 85, ContextWindowSize: 200000}
 	cfg := defaultCfg()
 	cfg.Context.ShowBreakdown = false
+	cfg.Style.Icons = "ascii"
 
 	got95 := Context(ctx95, cfg)
 	got85 := Context(ctx85, cfg)
@@ -1873,5 +1875,100 @@ func TestDurationWidget_NeitherSourceReturnsEmpty(t *testing.T) {
 
 	if got := Duration(ctx, cfg); got != "" {
 		t.Errorf("Duration with no data: expected empty, got %q", got)
+	}
+}
+
+// -- percentToIcon ------------------------------------------------------------
+
+// TestPercentToIcon_BoundaryValues checks that each of the 8 icon levels is
+// selected at the correct boundary and that edge cases (0, 100, negative) clamp
+// to the first or last icon.
+func TestPercentToIcon_BoundaryValues(t *testing.T) {
+	// The 8 Nerd Font circle-slice icons in codepoint order.
+	icons := [8]string{
+		"\U000F0A9E", // level 1 (nearly empty)
+		"\U000F0A9F", // level 2
+		"\U000F0AA0", // level 3
+		"\U000F0AA1", // level 4
+		"\U000F0AA2", // level 5
+		"\U000F0AA3", // level 6
+		"\U000F0AA4", // level 7
+		"\U000F0AA5", // level 8 (fully filled)
+	}
+
+	tests := []struct {
+		percent int
+		want    string
+		label   string
+	}{
+		// Clamping edges
+		{-1, icons[0], "negative clamps to first"},
+		{0, icons[0], "0% is first icon"},
+		{100, icons[7], "100% is last icon"},
+		{101, icons[7], "over 100 clamps to last"},
+
+		// Level boundaries: index = (percent * 8) / 100
+		// idx 0: 0–12  (but 0 handled above)
+		{1, icons[0], "1% → idx 0"},
+		{12, icons[0], "12% → idx 0"},
+		// idx 1: 13–24
+		{13, icons[1], "13% → idx 1"},
+		{24, icons[1], "24% → idx 1"},
+		// idx 2: 25–37
+		{25, icons[2], "25% → idx 2"},
+		{37, icons[2], "37% → idx 2"},
+		// idx 3: 38–49
+		{38, icons[3], "38% → idx 3"},
+		{49, icons[3], "49% → idx 3"},
+		// idx 4: 50–62
+		{50, icons[4], "50% → idx 4"},
+		{62, icons[4], "62% → idx 4"},
+		// idx 5: 63–74
+		{63, icons[5], "63% → idx 5"},
+		{74, icons[5], "74% → idx 5"},
+		// idx 6: 75–87
+		{75, icons[6], "75% → idx 6"},
+		{87, icons[6], "87% → idx 6"},
+		// idx 7: 88–99
+		{88, icons[7], "88% → idx 7"},
+		{99, icons[7], "99% → idx 7"},
+	}
+
+	for _, tt := range tests {
+		got := percentToIcon(tt.percent)
+		if got != tt.want {
+			t.Errorf("percentToIcon(%d) [%s]: got %q, want %q", tt.percent, tt.label, got, tt.want)
+		}
+	}
+}
+
+// TestContextWidget_NerdfontIconPrepended verifies that a circle-slice icon is prepended
+// to the context output when cfg.Style.Icons is "nerdfont".
+func TestContextWidget_NerdfontIconPrepended(t *testing.T) {
+	ctx := &model.RenderContext{ContextPercent: 50, ContextWindowSize: 200000}
+	cfg := defaultCfg()
+	cfg.Style.Icons = "nerdfont"
+
+	got := Context(ctx, cfg)
+	// The 50% icon is circle_slice_5 (U+F0AA2).
+	wantIcon := "\U000F0AA2"
+	if !strings.Contains(got, wantIcon) {
+		t.Errorf("Context(nerdfont, 50%%): expected circle-slice icon %q in output, got %q", wantIcon, got)
+	}
+}
+
+// TestContextWidget_NoIconWithoutNerdfont confirms the icon is absent in non-nerdfont modes.
+func TestContextWidget_NoIconWithoutNerdfont(t *testing.T) {
+	ctx := &model.RenderContext{ContextPercent: 50, ContextWindowSize: 200000}
+	cfg := defaultCfg()
+	cfg.Style.Icons = "ascii"
+
+	got := Context(ctx, cfg)
+	// None of the circle-slice icons should appear.
+	for _, icon := range []string{"\U000F0A9E", "\U000F0A9F", "\U000F0AA0", "\U000F0AA1",
+		"\U000F0AA2", "\U000F0AA3", "\U000F0AA4", "\U000F0AA5"} {
+		if strings.Contains(got, icon) {
+			t.Errorf("Context(ascii): unexpected circle-slice icon in output %q", got)
+		}
 	}
 }

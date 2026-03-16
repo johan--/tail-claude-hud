@@ -10,6 +10,36 @@ import (
 // Indexed as: blue, green, red, yellow, purple, cyan, orange, pink.
 var agentColors = [8]string{"75", "114", "196", "220", "135", "87", "208", "219"}
 
+// circleSliceIcons are Nerd Font circle-slice characters representing fill levels 1/8 through
+// 8/8 (U+F0A9E–U+F0AA5). Index 0 is nearly empty, index 7 is fully filled.
+var circleSliceIcons = [8]string{
+	"\U000F0A9E", // circle_slice_1 — 1/8 filled
+	"\U000F0A9F", // circle_slice_2 — 2/8 filled
+	"\U000F0AA0", // circle_slice_3 — 3/8 filled
+	"\U000F0AA1", // circle_slice_4 — 4/8 filled
+	"\U000F0AA2", // circle_slice_5 — 5/8 filled
+	"\U000F0AA3", // circle_slice_6 — 6/8 filled
+	"\U000F0AA4", // circle_slice_7 — 7/8 filled
+	"\U000F0AA5", // circle_slice_8 — fully filled
+}
+
+// percentToIcon maps a percentage (0–100) to one of 8 circle-slice Nerd Font icons.
+// The mapping divides the range into equal eighths: index = (percent * 8) / 100,
+// clamped to [0, 7] so that 100% yields the fully-filled icon.
+func percentToIcon(percent int) string {
+	if percent <= 0 {
+		return circleSliceIcons[0]
+	}
+	if percent >= 100 {
+		return circleSliceIcons[7]
+	}
+	idx := (percent * 8) / 100
+	if idx > 7 {
+		idx = 7
+	}
+	return circleSliceIcons[idx]
+}
+
 // AgentColorStyle returns a foreground lipgloss.Style for the given color index.
 // The index wraps around the 8-color palette, so any non-negative integer is valid.
 func AgentColorStyle(colorIndex int) lipgloss.Style {
