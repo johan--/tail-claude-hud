@@ -311,7 +311,7 @@ func TestGather_GitSpawnedForProjectWidget(t *testing.T) {
 	// the cwd is inside a real git repository.
 	input := minimalInput()
 	// Use a real directory that is inside a git repo so git.GetStatus returns data.
-	input.Cwd = "/Users/kyle/Code/my-projects/tail-claude-hud/.claude/worktrees/agent-a1526a8d"
+	input.Cwd = "/Users/kyle/Code/my-projects/tail-claude-hud"
 	cfg := cfgWithWidgets("project") // "git" widget NOT listed
 
 	ctx := Gather(input, cfg)
