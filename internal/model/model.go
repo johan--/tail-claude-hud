@@ -39,6 +39,15 @@ type TranscriptData struct {
 	Tools       []ToolEntry
 	Agents      []AgentEntry
 	Todos       []TodoItem
+
+	// ThinkingActive is true when the most recent assistant message contained a
+	// thinking block that was not followed by a tool_use or text block in the
+	// same message.
+	ThinkingActive bool
+
+	// ThinkingCount is the total number of thinking blocks observed across all
+	// assistant messages in the session.
+	ThinkingCount int
 }
 
 // ToolEntry records a single tool invocation observed in the transcript.

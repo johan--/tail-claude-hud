@@ -50,11 +50,18 @@ type ToolResultBlock struct {
 	IsError   bool            `json:"is_error"`
 }
 
+// ThinkingBlock represents a thinking content block from an assistant message.
+// The actual thinking text is intentionally omitted — only presence matters for
+// the statusline.
+type ThinkingBlock struct{}
+
 // ContentBlocks holds the extracted content blocks from a single message.
 // Blocks are classified during parsing; callers access only the types they need.
 type ContentBlocks struct {
 	ToolUse    []ToolUseBlock
 	ToolResult []ToolResultBlock
+	Thinking   []ThinkingBlock
+	HasText    bool // true when at least one "text" block is present
 }
 
 // ParseEntry parses a single JSONL line into an Entry.
@@ -70,16 +77,15 @@ func ParseEntry(line []byte) (Entry, error) {
 }
 
 // ExtractContentBlocks walks message.content and classifies each block by type.
-// Unrecognised block types are silently ignored — only tool_use and tool_result
-// are returned. Returns nil blocks (not an error) when content is absent or not
-// a JSON array.
+// Unrecognised block types are silently ignored. Returns nil blocks (not an
+// error) when content is absent or not a JSON array.
 func ExtractContentBlocks(e Entry) ContentBlocks {
 	if len(e.Message.Content) == 0 {
 		return ContentBlocks{}
 	}
 
 	// Content can be a JSON string (plain text) or an array of typed blocks.
-	// Only arrays contain tool_use / tool_result blocks.
+	// Only arrays contain tool_use / tool_result / thinking blocks.
 	if e.Message.Content[0] != '[' {
 		return ContentBlocks{}
 	}
@@ -123,6 +129,10 @@ func ExtractContentBlocks(e Entry) ContentBlocks {
 					IsError:   block.IsError,
 				})
 			}
+		case "thinking":
+			result.Thinking = append(result.Thinking, ThinkingBlock{})
+		case "text":
+			result.HasText = true
 		}
 	}
 	return result

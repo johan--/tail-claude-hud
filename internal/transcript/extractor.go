@@ -47,10 +47,10 @@ type internalAgent struct {
 	durationMs  int // 0 = still running; populated by a separate card
 }
 
-// ExtractionState accumulates tool, agent, and todo data across a sequence of
-// parsed transcript entries. It is designed for incremental use: call
-// ProcessEntry for each new line, then call ToTranscriptData for the latest
-// snapshot.
+// ExtractionState accumulates tool, agent, todo, and thinking data across a
+// sequence of parsed transcript entries. It is designed for incremental use:
+// call ProcessEntry for each new line, then call ToTranscriptData for the
+// latest snapshot.
 //
 // The state is NOT safe for concurrent use. Callers must synchronise externally
 // if ProcessEntry and ToTranscriptData are called from multiple goroutines.
@@ -78,6 +78,15 @@ type ExtractionState struct {
 	// sessionName holds the display name for the current session. Set from a
 	// custom-title entry when present, otherwise falls back to the slug field.
 	sessionName string
+
+	// thinkingActive is true when the most recent assistant message that
+	// contained a thinking block did not also contain a tool_use or text block.
+	// It is cleared whenever a tool_use or text block is seen in the same entry.
+	thinkingActive bool
+
+	// thinkingCount is the total number of thinking blocks observed across all
+	// assistant messages in the session.
+	thinkingCount int
 }
 
 // NewExtractionState returns an initialised, empty ExtractionState.
@@ -113,6 +122,17 @@ func (es *ExtractionState) ProcessEntry(e Entry) {
 
 	for _, b := range blocks.ToolResult {
 		es.processToolResult(b, ts)
+	}
+
+	// Update thinking state based on blocks present in this entry.
+	// Thinking is active only when a thinking block was seen but no subsequent
+	// tool_use or text block appeared in the same message.
+	if len(blocks.Thinking) > 0 {
+		es.thinkingCount += len(blocks.Thinking)
+		es.thinkingActive = len(blocks.ToolUse) == 0 && !blocks.HasText
+	} else if len(blocks.ToolUse) > 0 || blocks.HasText {
+		// A message with tool_use or text but no thinking clears the active flag.
+		es.thinkingActive = false
 	}
 }
 
@@ -340,10 +360,12 @@ func (es *ExtractionState) ToTranscriptData() *model.TranscriptData {
 	copy(todos, es.Todos)
 
 	return &model.TranscriptData{
-		SessionName: es.sessionName,
-		Tools:       tools,
-		Agents:      agents,
-		Todos:       todos,
+		SessionName:    es.sessionName,
+		Tools:          tools,
+		Agents:         agents,
+		Todos:          todos,
+		ThinkingActive: es.thinkingActive,
+		ThinkingCount:  es.thinkingCount,
 	}
 }
 

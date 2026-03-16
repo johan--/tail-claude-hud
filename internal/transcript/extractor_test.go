@@ -749,7 +749,6 @@ func TestProcessEntry_Slug_NotOverridenByLaterSlug(t *testing.T) {
 		t.Errorf("expected first slug to be retained, got %q", data.SessionName)
 	}
 }
-
 // ---- Tool duration computation from timestamp deltas -----------------------
 
 func TestToolDuration_ComputedFromTimestampDelta(t *testing.T) {
@@ -818,5 +817,139 @@ func TestAgentDuration_ZeroWhenStillRunning(t *testing.T) {
 	data := es.ToTranscriptData()
 	if data.Agents[0].DurationMs != 0 {
 		t.Errorf("expected DurationMs=0 for running agent, got %d", data.Agents[0].DurationMs)
+	}
+}
+// ---- Thinking block detection (specs 5 & 6) --------------------------------
+
+// makeThinkingEntry builds an Entry with a thinking block only (no tool_use, no text).
+func makeThinkingEntry() Entry {
+	content, _ := json.Marshal([]interface{}{
+		map[string]interface{}{"type": "thinking", "thinking": "Let me consider this..."},
+	})
+	var e Entry
+	e.Message.Role = "assistant"
+	e.Message.Content = content
+	e.Timestamp = "2025-01-15T10:00:00Z"
+	return e
+}
+
+// makeThinkingThenToolUseEntry builds an Entry with a thinking block followed by a tool_use.
+func makeThinkingThenToolUseEntry(toolID, toolName string, input map[string]interface{}) Entry {
+	inputJSON, _ := json.Marshal(input)
+	content, _ := json.Marshal([]interface{}{
+		map[string]interface{}{"type": "thinking", "thinking": "Let me use a tool"},
+		map[string]interface{}{
+			"type":  "tool_use",
+			"id":    toolID,
+			"name":  toolName,
+			"input": json.RawMessage(inputJSON),
+		},
+	})
+	var e Entry
+	e.Message.Role = "assistant"
+	e.Message.Content = content
+	e.Timestamp = "2025-01-15T10:00:01Z"
+	return e
+}
+
+// makeThinkingThenTextEntry builds an Entry with a thinking block followed by a text block.
+func makeThinkingThenTextEntry() Entry {
+	content, _ := json.Marshal([]interface{}{
+		map[string]interface{}{"type": "thinking", "thinking": "Let me respond"},
+		map[string]interface{}{"type": "text", "text": "Here is my answer."},
+	})
+	var e Entry
+	e.Message.Role = "assistant"
+	e.Message.Content = content
+	e.Timestamp = "2025-01-15T10:00:02Z"
+	return e
+}
+
+func TestThinking_ActiveWhenOnlyThinkingBlock(t *testing.T) {
+	es := NewExtractionState()
+	es.ProcessEntry(makeThinkingEntry())
+
+	data := es.ToTranscriptData()
+	if !data.ThinkingActive {
+		t.Error("expected ThinkingActive=true when last message contained only a thinking block")
+	}
+	if data.ThinkingCount != 1 {
+		t.Errorf("expected ThinkingCount=1, got %d", data.ThinkingCount)
+	}
+}
+
+func TestThinking_CountAccumulates(t *testing.T) {
+	es := NewExtractionState()
+	es.ProcessEntry(makeThinkingEntry())
+	es.ProcessEntry(makeThinkingEntry())
+	es.ProcessEntry(makeThinkingEntry())
+
+	data := es.ToTranscriptData()
+	if data.ThinkingCount != 3 {
+		t.Errorf("expected ThinkingCount=3, got %d", data.ThinkingCount)
+	}
+}
+
+func TestThinking_ActiveClearedWhenToolUseFollows(t *testing.T) {
+	// A thinking block in the same message as a tool_use should not be active.
+	es := NewExtractionState()
+	es.ProcessEntry(makeThinkingThenToolUseEntry("id-1", "Read", map[string]interface{}{"file_path": "x.go"}))
+
+	data := es.ToTranscriptData()
+	if data.ThinkingActive {
+		t.Error("expected ThinkingActive=false when thinking block is followed by tool_use in the same message")
+	}
+	// Count still increments — thinking happened even if not active.
+	if data.ThinkingCount != 1 {
+		t.Errorf("expected ThinkingCount=1, got %d", data.ThinkingCount)
+	}
+}
+
+func TestThinking_ActiveClearedWhenTextFollows(t *testing.T) {
+	// A thinking block followed by text in the same message should not be active.
+	es := NewExtractionState()
+	es.ProcessEntry(makeThinkingThenTextEntry())
+
+	data := es.ToTranscriptData()
+	if data.ThinkingActive {
+		t.Error("expected ThinkingActive=false when thinking block is followed by text in the same message")
+	}
+	if data.ThinkingCount != 1 {
+		t.Errorf("expected ThinkingCount=1, got %d", data.ThinkingCount)
+	}
+}
+
+func TestThinking_ActiveSetThenClearedBySubsequentToolUse(t *testing.T) {
+	// First entry: thinking only (active=true).
+	// Second entry: tool_use only (active=false).
+	es := NewExtractionState()
+	es.ProcessEntry(makeThinkingEntry())
+
+	data := es.ToTranscriptData()
+	if !data.ThinkingActive {
+		t.Fatal("expected ThinkingActive=true after first entry")
+	}
+
+	es.ProcessEntry(makeToolUseEntry("id-1", "Read", map[string]interface{}{"file_path": "x.go"}))
+	data = es.ToTranscriptData()
+	if data.ThinkingActive {
+		t.Error("expected ThinkingActive=false after a subsequent tool_use entry")
+	}
+	// Count should still be 1 (only the first entry had a thinking block).
+	if data.ThinkingCount != 1 {
+		t.Errorf("expected ThinkingCount=1, got %d", data.ThinkingCount)
+	}
+}
+
+func TestThinking_NoThinkingBlocks_ActiveFalse(t *testing.T) {
+	es := NewExtractionState()
+	es.ProcessEntry(makeToolUseEntry("id-1", "Bash", map[string]interface{}{"command": "ls"}))
+
+	data := es.ToTranscriptData()
+	if data.ThinkingActive {
+		t.Error("expected ThinkingActive=false when no thinking blocks present")
+	}
+	if data.ThinkingCount != 0 {
+		t.Errorf("expected ThinkingCount=0, got %d", data.ThinkingCount)
 	}
 }
