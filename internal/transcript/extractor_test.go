@@ -2263,3 +2263,144 @@ func TestMessageCount_PersistedInSnapshot(t *testing.T) {
 		t.Errorf("snapshot restore: expected MessageCount=2, got %d", data.MessageCount)
 	}
 }
+
+
+// ---- Skills extraction -----------------------------------------------------
+
+func TestSkills_NoSkills_EmptySlice(t *testing.T) {
+	es := NewExtractionState()
+	es.ProcessEntry(makeToolUseEntry("id-1", "Read", map[string]interface{}{"file_path": "main.go"}))
+
+	data := es.ToTranscriptData()
+	if len(data.SkillNames) != 0 {
+		t.Errorf("expected no skill names, got %v", data.SkillNames)
+	}
+}
+
+func TestSkills_SingleSkill_RecordsName(t *testing.T) {
+	es := NewExtractionState()
+	es.ProcessEntry(makeToolUseEntry("skill-1", "Skill", map[string]interface{}{
+		"skill": "commit",
+	}))
+
+	data := es.ToTranscriptData()
+	if len(data.SkillNames) != 1 {
+		t.Fatalf("expected 1 skill name, got %d", len(data.SkillNames))
+	}
+	if data.SkillNames[0] != "commit" {
+		t.Errorf("expected skill name 'commit', got %q", data.SkillNames[0])
+	}
+}
+
+func TestSkills_SingleSkill_AlsoAppearsInTools(t *testing.T) {
+	// Skills are also recorded as regular tool entries so they appear in the
+	// tools activity feed.
+	es := NewExtractionState()
+	es.ProcessEntry(makeToolUseEntry("skill-1", "Skill", map[string]interface{}{
+		"skill": "commit",
+	}))
+
+	data := es.ToTranscriptData()
+	if len(data.Tools) != 1 {
+		t.Fatalf("expected 1 tool entry, got %d", len(data.Tools))
+	}
+	if data.Tools[0].Name != "Skill" {
+		t.Errorf("expected tool name 'Skill', got %q", data.Tools[0].Name)
+	}
+}
+
+func TestSkills_MultipleSkills_RecordsAllInOrder(t *testing.T) {
+	es := NewExtractionState()
+	skills := []string{"commit", "review-pr", "lint"}
+	for i, s := range skills {
+		es.ProcessEntry(makeToolUseEntry(fmt.Sprintf("skill-%d", i), "Skill", map[string]interface{}{
+			"skill": s,
+		}))
+	}
+
+	data := es.ToTranscriptData()
+	if len(data.SkillNames) != 3 {
+		t.Fatalf("expected 3 skill names, got %d", len(data.SkillNames))
+	}
+	for i, want := range skills {
+		if data.SkillNames[i] != want {
+			t.Errorf("SkillNames[%d]: expected %q, got %q", i, want, data.SkillNames[i])
+		}
+	}
+}
+
+func TestSkills_NamespacedSkill_FullNamePreserved(t *testing.T) {
+	// Skills use a "namespace:skill-name" format; the full string should be
+	// stored without modification.
+	es := NewExtractionState()
+	es.ProcessEntry(makeToolUseEntry("skill-1", "Skill", map[string]interface{}{
+		"skill": "my-plugin:deploy",
+	}))
+
+	data := es.ToTranscriptData()
+	if len(data.SkillNames) != 1 {
+		t.Fatalf("expected 1 skill name, got %d", len(data.SkillNames))
+	}
+	if data.SkillNames[0] != "my-plugin:deploy" {
+		t.Errorf("expected 'my-plugin:deploy', got %q", data.SkillNames[0])
+	}
+}
+
+func TestSkills_Cap_KeepsLast20(t *testing.T) {
+	es := NewExtractionState()
+	for i := 0; i < 25; i++ {
+		es.ProcessEntry(makeToolUseEntry(
+			fmt.Sprintf("skill-%d", i),
+			"Skill",
+			map[string]interface{}{"skill": fmt.Sprintf("skill-%d", i)},
+		))
+	}
+
+	data := es.ToTranscriptData()
+	if len(data.SkillNames) != 20 {
+		t.Fatalf("expected 20 skill names (cap), got %d", len(data.SkillNames))
+	}
+	// Should contain the last 20: skill-5 through skill-24.
+	if data.SkillNames[0] != "skill-5" {
+		t.Errorf("expected oldest kept skill to be 'skill-5', got %q", data.SkillNames[0])
+	}
+	if data.SkillNames[19] != "skill-24" {
+		t.Errorf("expected newest skill to be 'skill-24', got %q", data.SkillNames[19])
+	}
+}
+
+func TestSkills_MissingSkillField_SkillNameEmpty(t *testing.T) {
+	// A Skill tool_use block without the "skill" field in input should not
+	// append an empty string to skillNames.
+	es := NewExtractionState()
+	es.ProcessEntry(makeToolUseEntry("skill-1", "Skill", map[string]interface{}{}))
+
+	data := es.ToTranscriptData()
+	if len(data.SkillNames) != 0 {
+		t.Errorf("expected no skill names for empty input, got %v", data.SkillNames)
+	}
+}
+
+func TestSkills_SnapshotRoundTrip_PreservesSkillNames(t *testing.T) {
+	es := NewExtractionState()
+	es.ProcessEntry(makeToolUseEntry("skill-1", "Skill", map[string]interface{}{"skill": "commit"}))
+	es.ProcessEntry(makeToolUseEntry("skill-2", "Skill", map[string]interface{}{"skill": "review-pr"}))
+
+	snap, err := es.MarshalSnapshot()
+	if err != nil {
+		t.Fatalf("MarshalSnapshot: %v", err)
+	}
+
+	es2 := NewExtractionState()
+	if err := es2.UnmarshalSnapshot(snap); err != nil {
+		t.Fatalf("UnmarshalSnapshot: %v", err)
+	}
+
+	data := es2.ToTranscriptData()
+	if len(data.SkillNames) != 2 {
+		t.Fatalf("expected 2 skill names after round-trip, got %d", len(data.SkillNames))
+	}
+	if data.SkillNames[0] != "commit" || data.SkillNames[1] != "review-pr" {
+		t.Errorf("unexpected skill names after round-trip: %v", data.SkillNames)
+	}
+}

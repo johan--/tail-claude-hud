@@ -18,6 +18,9 @@ const maxTools = 20
 // maxAgents is the maximum number of AgentEntries kept in the display slice.
 const maxAgents = 10
 
+// maxSkills is the maximum number of skill names kept in the display slice.
+const maxSkills = 20
+
 // bashTargetMaxLen is the number of characters kept from a Bash command for
 // the target field (matches claude-hud's 40-char truncation convention; the
 // TS source uses 30 but the card spec says 40).
@@ -101,6 +104,11 @@ type ExtractionState struct {
 	// in the transcript, excluding tool_result entries (which are infrastructure
 	// messages, not conversational turns).
 	MessageCount int
+
+	// skillNames is the ordered list of skill names invoked in the session
+	// (newest last), capped at maxSkills. Skills appear as tool_use blocks
+	// with name=="Skill" and input.skill containing the skill name.
+	skillNames []string
 }
 
 // NewExtractionState returns an initialised, empty ExtractionState.
@@ -189,9 +197,33 @@ func (es *ExtractionState) processToolUse(b ToolUseBlock, ts time.Time) {
 		es.handleTaskCreate(b)
 	case "TaskUpdate":
 		es.handleTaskUpdate(b)
+	case "Skill":
+		es.handleSkillToolUse(b, ts)
 	default:
 		es.handleRegularToolUse(b, ts)
 	}
+}
+
+// handleSkillToolUse records a skill invocation. Skills appear as tool_use blocks
+// with name=="Skill" and input {"skill": "namespace:skill-name"}. The skill name
+// is appended to skillNames (capped at maxSkills) and also recorded as a regular
+// tool entry so it appears in the tools widget activity feed.
+func (es *ExtractionState) handleSkillToolUse(b ToolUseBlock, ts time.Time) {
+	var input struct {
+		Skill string `json:"skill"`
+	}
+	// Intentionally ignore parse errors — partial data is acceptable.
+	_ = json.Unmarshal(b.Input, &input)
+
+	if input.Skill != "" {
+		es.skillNames = append(es.skillNames, input.Skill)
+		if len(es.skillNames) > maxSkills {
+			es.skillNames = es.skillNames[1:]
+		}
+	}
+
+	// Also register as a regular tool so it appears in the tools feed.
+	es.handleRegularToolUse(b, ts)
 }
 
 // handleRegularToolUse records a running tool entry and appends it to the
@@ -403,11 +435,15 @@ func (es *ExtractionState) ToTranscriptData() *model.TranscriptData {
 	todos := make([]model.TodoItem, len(es.Todos))
 	copy(todos, es.Todos)
 
+	skillNames := make([]string, len(es.skillNames))
+	copy(skillNames, es.skillNames)
+
 	return &model.TranscriptData{
 		SessionName:    es.sessionName,
 		Tools:          tools,
 		Agents:         agents,
 		Todos:          todos,
+		SkillNames:     skillNames,
 		ThinkingActive: es.thinkingActive,
 		ThinkingCount:  es.thinkingCount,
 		SpinnerFrame:   es.spinnerFrame,
@@ -520,6 +556,7 @@ type extractionSnapshot struct {
 	Tools          []snapshotTool   `json:"tools"`
 	Agents         []snapshotAgent  `json:"agents"`
 	Todos          []model.TodoItem `json:"todos"`
+	SkillNames     []string         `json:"skill_names,omitempty"`
 	SessionName    string           `json:"session_name"`
 	ThinkingActive bool             `json:"thinking_active"`
 	ThinkingCount  int              `json:"thinking_count"`
@@ -589,10 +626,14 @@ func (es *ExtractionState) MarshalSnapshot() (json.RawMessage, error) {
 	todos := make([]model.TodoItem, len(es.Todos))
 	copy(todos, es.Todos)
 
+	skillNames := make([]string, len(es.skillNames))
+	copy(skillNames, es.skillNames)
+
 	snap := extractionSnapshot{
 		Tools:          tools,
 		Agents:         agents,
 		Todos:          todos,
+		SkillNames:     skillNames,
 		SessionName:    es.sessionName,
 		ThinkingActive: es.thinkingActive,
 		ThinkingCount:  es.thinkingCount,
@@ -670,6 +711,10 @@ func (es *ExtractionState) UnmarshalSnapshot(data json.RawMessage) error {
 				es.taskIDIndex[item.ID] = i
 			}
 		}
+	}
+
+	if snap.SkillNames != nil {
+		es.skillNames = snap.SkillNames
 	}
 
 	es.sessionName = snap.SessionName

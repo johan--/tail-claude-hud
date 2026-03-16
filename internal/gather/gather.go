@@ -28,6 +28,7 @@ var transcriptWidgets = map[string]bool{
 	"thinking": true,
 	"session":  true,
 	"messages": true,
+	"skills":   true,
 }
 
 // Gather builds a RenderContext by collecting data in parallel for each data

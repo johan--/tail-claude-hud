@@ -53,6 +53,10 @@ type TranscriptData struct {
 	Tools       []ToolEntry
 	Agents      []AgentEntry
 	Todos       []TodoItem
+	// SkillNames is the ordered list of skill names invoked in the session
+	// (newest last), capped at 20. Each entry is the full skill identifier
+	// extracted from a "Skill" tool_use block's input.skill field.
+	SkillNames []string
 
 	// ThinkingActive is true when the most recent assistant message contained a
 	// thinking block that was not followed by a tool_use or text block in the
