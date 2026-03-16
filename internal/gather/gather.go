@@ -300,8 +300,15 @@ func discoverSubagents(transcriptPath string) []model.AgentEntry {
 			status = "running"
 		}
 
+		// Read .meta.json sidecar for the agentType display name.
+		// Falls back to the raw agentID when the sidecar is missing.
+		displayName := agentID
+		if at := readAgentType(filepath.Join(subagentsDir, "agent-"+agentID+".meta.json")); at != "" {
+			displayName = at
+		}
+
 		agents = append(agents, model.AgentEntry{
-			Name:       agentID,
+			Name:       displayName,
 			Status:     status,
 			StartTime:  info.ModTime(),
 			ColorIndex: colorIdx % 8,
@@ -335,6 +342,22 @@ func isWarmupAgent(path string) bool {
 		return false
 	}
 	return content == "Warmup"
+}
+
+// readAgentType reads a .meta.json sidecar file and returns the agentType
+// field. Returns "" when the file is missing, empty, or lacks the field.
+func readAgentType(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	var meta struct {
+		AgentType string `json:"agentType"`
+	}
+	if json.Unmarshal(data, &meta) != nil {
+		return ""
+	}
+	return meta.AgentType
 }
 
 // mergeSubagents folds filesystem-discovered agents into the transcript data.
