@@ -528,6 +528,105 @@ func TestToTranscriptData_DurationMs_ZeroByDefault(t *testing.T) {
 	}
 }
 
+// ---- Agent metadata fields flow through ToTranscriptData -------------------
+
+func TestAgentMetadata_ModelAndDescription(t *testing.T) {
+	es := NewExtractionState()
+	es.ProcessEntry(makeToolUseEntry("agent-1", "Task", map[string]interface{}{
+		"subagent_type": "coding",
+		"model":         "claude-haiku-4-5",
+		"description":   "Implement the feature",
+	}))
+
+	data := es.ToTranscriptData()
+	if len(data.Agents) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(data.Agents))
+	}
+	a := data.Agents[0]
+	if a.Model != "claude-haiku-4-5" {
+		t.Errorf("expected Model=%q, got %q", "claude-haiku-4-5", a.Model)
+	}
+	if a.Description != "Implement the feature" {
+		t.Errorf("expected Description=%q, got %q", "Implement the feature", a.Description)
+	}
+}
+
+func TestAgentMetadata_StartTimePopulated(t *testing.T) {
+	es := NewExtractionState()
+	before := time.Now()
+	es.ProcessEntry(makeToolUseEntry("agent-1", "Task", map[string]interface{}{
+		"subagent_type": "coding",
+	}))
+	after := time.Now()
+
+	data := es.ToTranscriptData()
+	if len(data.Agents) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(data.Agents))
+	}
+	st := data.Agents[0].StartTime
+	if st.IsZero() {
+		t.Error("expected StartTime to be set, got zero value")
+	}
+	if st.Before(before) || st.After(after) {
+		t.Errorf("StartTime %v is outside expected range [%v, %v]", st, before, after)
+	}
+}
+
+func TestAgentMetadata_DurationMsZero(t *testing.T) {
+	// DurationMs starts at 0 (still running); a separate card will compute it.
+	es := NewExtractionState()
+	es.ProcessEntry(makeToolUseEntry("agent-1", "Task", map[string]interface{}{
+		"subagent_type": "coding",
+	}))
+
+	data := es.ToTranscriptData()
+	if data.Agents[0].DurationMs != 0 {
+		t.Errorf("expected DurationMs=0, got %d", data.Agents[0].DurationMs)
+	}
+}
+
+func TestAgentMetadata_ColorIndexSequential(t *testing.T) {
+	es := NewExtractionState()
+	for i := 0; i < 10; i++ {
+		id := string(rune('a' + i))
+		es.ProcessEntry(makeToolUseEntry(id, "Task", map[string]interface{}{
+			"subagent_type": "coding",
+		}))
+	}
+
+	data := es.ToTranscriptData()
+	// With maxAgents=10 and 10 agents added, all 10 should be present.
+	if len(data.Agents) != 10 {
+		t.Fatalf("expected 10 agents, got %d", len(data.Agents))
+	}
+	for i, a := range data.Agents {
+		want := i % 8
+		if a.ColorIndex != want {
+			t.Errorf("agent[%d]: expected ColorIndex=%d, got %d", i, want, a.ColorIndex)
+		}
+	}
+}
+
+func TestAgentMetadata_ColorIndexWrapsAt8(t *testing.T) {
+	// Add 9 agents: indices 0-7 then wrap back to 0.
+	es := NewExtractionState()
+	for i := 0; i < 9; i++ {
+		id := string(rune('a' + i))
+		es.ProcessEntry(makeToolUseEntry(id, "Task", map[string]interface{}{
+			"subagent_type": "coding",
+		}))
+	}
+
+	data := es.ToTranscriptData()
+	if len(data.Agents) != 9 {
+		t.Fatalf("expected 9 agents, got %d", len(data.Agents))
+	}
+	// The 9th agent (index 8) should wrap to ColorIndex 0.
+	if data.Agents[8].ColorIndex != 0 {
+		t.Errorf("expected ColorIndex=0 for 9th agent (wrap), got %d", data.Agents[8].ColorIndex)
+	}
+}
+
 // ---- Regular tools are not tracked as agents ------------------------------
 
 func TestProcessEntry_RegularTool_NotInAgents(t *testing.T) {

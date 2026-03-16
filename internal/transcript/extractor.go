@@ -38,10 +38,13 @@ type internalTool struct {
 
 // internalAgent holds richer per-invocation state than model.AgentEntry.
 type internalAgent struct {
-	id        string
-	agentType string
-	model     string
-	status    string // "running" or "completed"
+	id          string
+	agentType   string
+	model       string
+	description string
+	status      string // "running" or "completed"
+	startTime   time.Time
+	durationMs  int // 0 = still running; populated by a separate card
 }
 
 // ExtractionState accumulates tool, agent, and todo data across a sequence of
@@ -166,12 +169,13 @@ func (es *ExtractionState) handleAgentToolUse(b ToolUseBlock, ts time.Time) {
 	}
 
 	a := &internalAgent{
-		id:        b.ID,
-		agentType: agentType,
-		model:     input.Model,
-		status:    "running",
+		id:          b.ID,
+		agentType:   agentType,
+		model:       input.Model,
+		description: input.Description,
+		status:      "running",
+		startTime:   ts,
 	}
-	_ = ts // reserved for future use (e.g. duration display)
 	es.agentMap[b.ID] = a
 	es.displayAgents = append(es.displayAgents, a)
 
@@ -317,10 +321,15 @@ func (es *ExtractionState) ToTranscriptData() *model.TranscriptData {
 	}
 
 	agents := make([]model.AgentEntry, 0, len(es.displayAgents))
-	for _, a := range es.displayAgents {
+	for i, a := range es.displayAgents {
 		agents = append(agents, model.AgentEntry{
-			Name:   a.agentType,
-			Status: a.status,
+			Name:        a.agentType,
+			Status:      a.status,
+			Model:       a.model,
+			Description: a.description,
+			ColorIndex:  i % 8,
+			StartTime:   a.startTime,
+			DurationMs:  a.durationMs,
 		})
 	}
 

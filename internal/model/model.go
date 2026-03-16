@@ -1,6 +1,8 @@
 // Package model defines the shared data types passed between gather and render stages.
 package model
 
+import "time"
+
 // RenderContext is the central struct passed from the gather stage to each render widget.
 // Every pointer field may be nil — widgets must guard against nil before dereferencing.
 type RenderContext struct {
@@ -51,8 +53,13 @@ type ToolEntry struct {
 
 // AgentEntry records a sub-agent task observed in the transcript.
 type AgentEntry struct {
-	Name   string
-	Status string
+	Name        string
+	Status      string
+	Model       string    // e.g. "claude-haiku-4-5"
+	Description string    // agent task description from the tool input
+	ColorIndex  int       // 0-7, assigned by first-appearance order (index % 8)
+	StartTime   time.Time // when the agent tool_use was observed
+	DurationMs  int       // 0 = still running; populated by a separate card
 }
 
 // TodoItem represents a todo entry from the Claude Code session.
