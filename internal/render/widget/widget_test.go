@@ -496,26 +496,61 @@ func TestAgentsWidget_EmptyAgentsReturnsEmpty(t *testing.T) {
 	}
 }
 
-func TestAgentsWidget_RunningAgentShowsSpinner(t *testing.T) {
+func TestAgentsWidget_RunningAgentShowsColoredIconAndSpinner(t *testing.T) {
+	startTime := time.Now().Add(-2*time.Minute - 15*time.Second)
 	ctx := &model.RenderContext{Transcript: &model.TranscriptData{
-		Agents: []model.AgentEntry{{Name: "TaskWorker", Status: "running"}},
+		Agents: []model.AgentEntry{
+			{Name: "explore", Status: "running", ColorIndex: 0, StartTime: startTime},
+		},
+	}}
+	cfg := defaultCfg()
+	cfg.Style.Icons = "ascii"
+
+	got := Agents(ctx, cfg)
+
+	// Agent name must appear.
+	if !strings.Contains(got, "explore") {
+		t.Errorf("Agents running: expected name 'explore', got %q", got)
+	}
+	// A braille spinner frame must appear.
+	foundSpinner := false
+	for _, frame := range brailleFrames {
+		if strings.Contains(got, frame) {
+			foundSpinner = true
+			break
+		}
+	}
+	if !foundSpinner {
+		t.Errorf("Agents running: expected braille spinner frame in output, got %q", got)
+	}
+	// Elapsed time should appear (at least minutes marker).
+	if !strings.Contains(got, "m") {
+		t.Errorf("Agents running: expected elapsed time with 'm', got %q", got)
+	}
+}
+
+func TestAgentsWidget_RunningAgentUsesAgentIcon(t *testing.T) {
+	ctx := &model.RenderContext{Transcript: &model.TranscriptData{
+		Agents: []model.AgentEntry{
+			{Name: "TaskWorker", Status: "running", ColorIndex: 1, StartTime: time.Now()},
+		},
 	}}
 	cfg := defaultCfg()
 	cfg.Style.Icons = "ascii"
 
 	got := Agents(ctx, cfg)
 	icons := IconsFor("ascii")
-	if !strings.Contains(got, icons.Spinner) {
-		t.Errorf("Agents running: expected spinner icon %q, got %q", icons.Spinner, got)
-	}
-	if !strings.Contains(got, "TaskWorker") {
-		t.Errorf("Agents running: expected name 'TaskWorker', got %q", got)
+	// The agent icon should be rendered (ASCII mode uses "@" for Agent).
+	if !strings.Contains(got, icons.Agent) {
+		t.Errorf("Agents running: expected agent icon %q, got %q", icons.Agent, got)
 	}
 }
 
 func TestAgentsWidget_CompletedAgentShowsCheck(t *testing.T) {
 	ctx := &model.RenderContext{Transcript: &model.TranscriptData{
-		Agents: []model.AgentEntry{{Name: "SearchAgent", Status: "completed"}},
+		Agents: []model.AgentEntry{
+			{Name: "SearchAgent", Status: "completed", ColorIndex: 2, DurationMs: 5000},
+		},
 	}}
 	cfg := defaultCfg()
 	cfg.Style.Icons = "ascii"
@@ -525,17 +560,74 @@ func TestAgentsWidget_CompletedAgentShowsCheck(t *testing.T) {
 	if !strings.Contains(got, icons.Check) {
 		t.Errorf("Agents completed: expected check icon %q, got %q", icons.Check, got)
 	}
+	if !strings.Contains(got, "SearchAgent") {
+		t.Errorf("Agents completed: expected name 'SearchAgent', got %q", got)
+	}
+	// Duration should show "5s".
+	if !strings.Contains(got, "5s") {
+		t.Errorf("Agents completed: expected duration '5s', got %q", got)
+	}
 }
 
-func TestAgentsWidget_ShowsStatusLabel(t *testing.T) {
+func TestAgentsWidget_DifferentAgentsGetDifferentColors(t *testing.T) {
+	// Two agents with distinct ColorIndex values must render with distinct color styles.
+	style0 := AgentColorStyle(0)
+	style1 := AgentColorStyle(1)
+
+	rendered0 := style0.Render("test")
+	rendered1 := style1.Render("test")
+	if rendered0 == rendered1 {
+		t.Errorf("AgentColorStyle(0) and AgentColorStyle(1) produced identical rendering %q", rendered0)
+	}
+}
+
+func TestAgentsWidget_ModelSuffixShownWhenPresent(t *testing.T) {
 	ctx := &model.RenderContext{Transcript: &model.TranscriptData{
-		Agents: []model.AgentEntry{{Name: "Worker", Status: "running"}},
+		Agents: []model.AgentEntry{
+			{Name: "explore", Status: "running", ColorIndex: 0, Model: "claude-haiku-4-5", StartTime: time.Now()},
+		},
 	}}
 	cfg := defaultCfg()
 
 	got := Agents(ctx, cfg)
-	if !strings.Contains(got, "running") {
-		t.Errorf("Agents: expected status 'running' in output, got %q", got)
+	if !strings.Contains(got, "haiku") {
+		t.Errorf("Agents: expected model family 'haiku' in output, got %q", got)
+	}
+}
+
+func TestAgentsWidget_NoModelSuffixWhenAbsent(t *testing.T) {
+	ctx := &model.RenderContext{Transcript: &model.TranscriptData{
+		Agents: []model.AgentEntry{
+			{Name: "worker", Status: "running", ColorIndex: 0, Model: "", StartTime: time.Now()},
+		},
+	}}
+	cfg := defaultCfg()
+
+	got := Agents(ctx, cfg)
+	if strings.Contains(got, "(") {
+		t.Errorf("Agents: expected no model suffix when Model is empty, got %q", got)
+	}
+}
+
+func TestAgentsWidget_MaxFiveTotal(t *testing.T) {
+	// 4 running + 3 completed = 7 agents; should cap at 5.
+	agents := []model.AgentEntry{
+		{Name: "r1", Status: "running", ColorIndex: 0, StartTime: time.Now()},
+		{Name: "r2", Status: "running", ColorIndex: 1, StartTime: time.Now()},
+		{Name: "r3", Status: "running", ColorIndex: 2, StartTime: time.Now()},
+		{Name: "r4", Status: "running", ColorIndex: 3, StartTime: time.Now()},
+		{Name: "c1", Status: "completed", ColorIndex: 4, DurationMs: 1000},
+		{Name: "c2", Status: "completed", ColorIndex: 5, DurationMs: 2000},
+		{Name: "c3", Status: "completed", ColorIndex: 6, DurationMs: 3000},
+	}
+	ctx := &model.RenderContext{Transcript: &model.TranscriptData{Agents: agents}}
+	cfg := defaultCfg()
+
+	got := Agents(ctx, cfg)
+	// Count the " | " separators — 4 separators means 5 entries.
+	separators := strings.Count(got, " | ")
+	if separators > 4 {
+		t.Errorf("Agents: expected at most 5 entries (4 separators), got %d separators in %q", separators, got)
 	}
 }
 
