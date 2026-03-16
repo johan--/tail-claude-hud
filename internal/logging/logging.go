@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/kylesnowschwartz/tail-claude-hud/internal/model"
 )
 
 var (
@@ -35,14 +37,7 @@ func init() {
 // getLogger returns the shared logger, creating the log file on first use.
 func getLogger() *log.Logger {
 	once.Do(func() {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			// Cannot determine home directory — disable logging silently.
-			enabled = false
-			return
-		}
-
-		dir := filepath.Join(home, ".claude", "plugins", "tail-claude-hud")
+		dir := model.PluginDir()
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			enabled = false
 			return

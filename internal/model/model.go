@@ -1,7 +1,11 @@
 // Package model defines the shared data types passed between gather and render stages.
 package model
 
-import "time"
+import (
+	"os"
+	"path/filepath"
+	"time"
+)
 
 // RenderContext is the central struct passed from the gather stage to each render widget.
 // Every pointer field may be nil — widgets must guard against nil before dereferencing.
@@ -130,4 +134,15 @@ type StdinData struct {
 
 	// ContextPercent is computed by the stdin package — not decoded from JSON.
 	ContextPercent int `json:"-"`
+}
+
+// PluginDir returns the directory used for plugin state files:
+// ~/.claude/plugins/tail-claude-hud/
+// Falls back to os.TempDir() if the home directory cannot be resolved.
+func PluginDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return os.TempDir()
+	}
+	return filepath.Join(home, ".claude", "plugins", "tail-claude-hud")
 }

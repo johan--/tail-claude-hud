@@ -93,11 +93,7 @@ func LoadSnapshot() (*model.StdinData, error) {
 }
 
 func defaultSnapshotDir() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(home, ".claude", "plugins", "tail-claude-hud")
+	return model.PluginDir()
 }
 
 // computeContextPercent returns the context usage as a 0–100 integer.
