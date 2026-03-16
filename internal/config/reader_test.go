@@ -28,13 +28,19 @@ func TestCountEnv_EmptyCwd(t *testing.T) {
 	if counts.MCPServers != 0 {
 		t.Errorf("MCPServers = %d, want 0", counts.MCPServers)
 	}
-	if counts.ToolsAllowed != 0 {
-		t.Errorf("ToolsAllowed = %d, want 0", counts.ToolsAllowed)
+	if counts.ClaudeMdFiles != 0 {
+		t.Errorf("ClaudeMdFiles = %d, want 0", counts.ClaudeMdFiles)
+	}
+	if counts.RuleFiles != 0 {
+		t.Errorf("RuleFiles = %d, want 0", counts.RuleFiles)
+	}
+	if counts.Hooks != 0 {
+		t.Errorf("Hooks = %d, want 0", counts.Hooks)
 	}
 }
 
 // TestCountEnv_ClaudeMdFiles verifies CLAUDE.md files are counted from the
-// standard cwd locations.
+// standard cwd locations as a separate ClaudeMdFiles category.
 func TestCountEnv_ClaudeMdFiles(t *testing.T) {
 	home := t.TempDir()
 	dir := t.TempDir()
@@ -44,12 +50,20 @@ func TestCountEnv_ClaudeMdFiles(t *testing.T) {
 	writeFile(t, filepath.Join(dir, ".claude", "CLAUDE.md"), "# claude dir")
 
 	counts := countEnvWithHome(dir, home)
-	if counts.ToolsAllowed != 3 {
-		t.Errorf("ToolsAllowed = %d, want 3 (3 CLAUDE.md files)", counts.ToolsAllowed)
+	if counts.ClaudeMdFiles != 3 {
+		t.Errorf("ClaudeMdFiles = %d, want 3 (3 CLAUDE.md files)", counts.ClaudeMdFiles)
+	}
+	// Other categories must remain zero.
+	if counts.RuleFiles != 0 {
+		t.Errorf("RuleFiles = %d, want 0", counts.RuleFiles)
+	}
+	if counts.Hooks != 0 {
+		t.Errorf("Hooks = %d, want 0", counts.Hooks)
 	}
 }
 
-// TestCountEnv_HomeScopeClaudeMd verifies the home-scope CLAUDE.md is counted.
+// TestCountEnv_HomeScopeClaudeMd verifies the home-scope CLAUDE.md is counted
+// in ClaudeMdFiles.
 func TestCountEnv_HomeScopeClaudeMd(t *testing.T) {
 	home := t.TempDir()
 	dir := t.TempDir()
@@ -57,12 +71,13 @@ func TestCountEnv_HomeScopeClaudeMd(t *testing.T) {
 	writeFile(t, filepath.Join(home, ".claude", "CLAUDE.md"), "# user instructions")
 
 	counts := countEnvWithHome(dir, home)
-	if counts.ToolsAllowed != 1 {
-		t.Errorf("ToolsAllowed = %d, want 1 (home CLAUDE.md)", counts.ToolsAllowed)
+	if counts.ClaudeMdFiles != 1 {
+		t.Errorf("ClaudeMdFiles = %d, want 1 (home CLAUDE.md)", counts.ClaudeMdFiles)
 	}
 }
 
-// TestCountEnv_RulesFiles verifies .md files in rules directories are counted.
+// TestCountEnv_RulesFiles verifies .md files in rules directories are counted
+// in RuleFiles and not mixed into ClaudeMdFiles.
 func TestCountEnv_RulesFiles(t *testing.T) {
 	home := t.TempDir()
 	dir := t.TempDir()
@@ -72,8 +87,11 @@ func TestCountEnv_RulesFiles(t *testing.T) {
 	writeFile(t, filepath.Join(dir, ".claude", "rules", "nested", "security.md"), "# security")
 
 	counts := countEnvWithHome(dir, home)
-	if counts.ToolsAllowed != 3 {
-		t.Errorf("ToolsAllowed = %d, want 3 (3 rule files)", counts.ToolsAllowed)
+	if counts.RuleFiles != 3 {
+		t.Errorf("RuleFiles = %d, want 3 (3 rule files)", counts.RuleFiles)
+	}
+	if counts.ClaudeMdFiles != 0 {
+		t.Errorf("ClaudeMdFiles = %d, want 0 (rules are not CLAUDE.md files)", counts.ClaudeMdFiles)
 	}
 }
 
@@ -87,8 +105,8 @@ func TestCountEnv_RulesIgnoresNonMd(t *testing.T) {
 	writeFile(t, filepath.Join(dir, ".claude", "rules", "config.json"), "{}")
 
 	counts := countEnvWithHome(dir, home)
-	if counts.ToolsAllowed != 1 {
-		t.Errorf("ToolsAllowed = %d, want 1 (only .md files count)", counts.ToolsAllowed)
+	if counts.RuleFiles != 1 {
+		t.Errorf("RuleFiles = %d, want 1 (only .md files count)", counts.RuleFiles)
 	}
 }
 
@@ -169,9 +187,9 @@ func TestCountEnv_McpServersDeduplicatedWithHome(t *testing.T) {
 	}
 }
 
-// TestCountEnv_HooksCountedAsToolsAllowed verifies that non-empty hooks arrays
-// in settings.json contribute to ToolsAllowed.
-func TestCountEnv_HooksCountedAsToolsAllowed(t *testing.T) {
+// TestCountEnv_HooksCountedSeparately verifies that non-empty hooks arrays
+// in settings.json are tracked in the Hooks field, not mixed with other counts.
+func TestCountEnv_HooksCountedSeparately(t *testing.T) {
 	home := t.TempDir()
 	dir := t.TempDir()
 
@@ -185,8 +203,15 @@ func TestCountEnv_HooksCountedAsToolsAllowed(t *testing.T) {
 
 	counts := countEnvWithHome(dir, home)
 	// 2 non-empty hook arrays (Stop is empty so excluded)
-	if counts.ToolsAllowed != 2 {
-		t.Errorf("ToolsAllowed = %d, want 2 (2 non-empty hook arrays)", counts.ToolsAllowed)
+	if counts.Hooks != 2 {
+		t.Errorf("Hooks = %d, want 2 (2 non-empty hook arrays)", counts.Hooks)
+	}
+	// Hooks must not bleed into other categories.
+	if counts.ClaudeMdFiles != 0 {
+		t.Errorf("ClaudeMdFiles = %d, want 0", counts.ClaudeMdFiles)
+	}
+	if counts.RuleFiles != 0 {
+		t.Errorf("RuleFiles = %d, want 0", counts.RuleFiles)
 	}
 }
 
@@ -204,8 +229,14 @@ func TestCountEnv_MissingFilesSkippedWithoutError(t *testing.T) {
 	if counts.MCPServers != 0 {
 		t.Errorf("MCPServers = %d, want 0", counts.MCPServers)
 	}
-	if counts.ToolsAllowed != 0 {
-		t.Errorf("ToolsAllowed = %d, want 0", counts.ToolsAllowed)
+	if counts.ClaudeMdFiles != 0 {
+		t.Errorf("ClaudeMdFiles = %d, want 0", counts.ClaudeMdFiles)
+	}
+	if counts.RuleFiles != 0 {
+		t.Errorf("RuleFiles = %d, want 0", counts.RuleFiles)
+	}
+	if counts.Hooks != 0 {
+		t.Errorf("Hooks = %d, want 0", counts.Hooks)
 	}
 }
 
@@ -225,22 +256,22 @@ func TestCountEnv_InvalidJsonSkipped(t *testing.T) {
 }
 
 // TestCountEnv_AllSourcesCombined verifies that all sources contribute correctly
-// to the final counts when used together.
+// to the separate count categories when used together.
 func TestCountEnv_AllSourcesCombined(t *testing.T) {
 	home := t.TempDir()
 	dir := t.TempDir()
 
-	// Home CLAUDE.md: 1
+	// Home CLAUDE.md: 1 ClaudeMdFile
 	writeFile(t, filepath.Join(home, ".claude", "CLAUDE.md"), "# user")
 
-	// Home rules: 1
+	// Home rules: 1 RuleFile
 	writeFile(t, filepath.Join(home, ".claude", "rules", "global.md"), "rule")
 
-	// cwd CLAUDE.md files: 2
+	// cwd CLAUDE.md files: 2 ClaudeMdFiles
 	writeFile(t, filepath.Join(dir, "CLAUDE.md"), "# project")
 	writeFile(t, filepath.Join(dir, "CLAUDE.local.md"), "# local")
 
-	// cwd rule files: 2
+	// cwd rule files: 2 RuleFiles
 	writeFile(t, filepath.Join(dir, ".claude", "rules", "a.md"), "rule a")
 	writeFile(t, filepath.Join(dir, ".claude", "rules", "b.md"), "rule b")
 
@@ -264,9 +295,19 @@ func TestCountEnv_AllSourcesCombined(t *testing.T) {
 		t.Errorf("MCPServers = %d, want 3", counts.MCPServers)
 	}
 
-	// ToolsAllowed: 1 home CLAUDE.md + 1 home rule + 2 cwd CLAUDE.md + 2 cwd rules + 1 hook = 7
-	if counts.ToolsAllowed != 7 {
-		t.Errorf("ToolsAllowed = %d, want 7", counts.ToolsAllowed)
+	// ClaudeMdFiles: 1 home + 2 cwd = 3
+	if counts.ClaudeMdFiles != 3 {
+		t.Errorf("ClaudeMdFiles = %d, want 3", counts.ClaudeMdFiles)
+	}
+
+	// RuleFiles: 1 home + 2 cwd = 3
+	if counts.RuleFiles != 3 {
+		t.Errorf("RuleFiles = %d, want 3", counts.RuleFiles)
+	}
+
+	// Hooks: 1 non-empty hook array
+	if counts.Hooks != 1 {
+		t.Errorf("Hooks = %d, want 1", counts.Hooks)
 	}
 }
 

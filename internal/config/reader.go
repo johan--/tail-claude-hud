@@ -32,10 +32,11 @@ type mcpFile struct {
 //   - {cwd}/.claude/settings.local.json
 //   - {cwd}/.mcp.json
 //
-// ToolsAllowed counts:
-//   - CLAUDE.md files that exist at standard paths
-//   - Rule files: .md files under ~/.claude/rules/ and {cwd}/.claude/rules/
-//   - Non-empty hook event arrays in all settings.json files
+// ClaudeMdFiles counts CLAUDE.md files that exist at standard paths.
+//
+// RuleFiles counts .md files under ~/.claude/rules/ and {cwd}/.claude/rules/.
+//
+// Hooks counts non-empty hook event arrays in all settings.json files.
 //
 // Missing files are silently skipped. Invalid JSON is silently skipped.
 func CountEnv(cwd string) *model.EnvCounts {
@@ -66,35 +67,30 @@ func countEnvWithHome(cwd, home string) *model.EnvCounts {
 	}
 	counts.MCPServers = len(mcpNames)
 
-	// --- ToolsAllowed ---
-	toolsAllowed := 0
-
-	// CLAUDE.md files
-	claudeMdPaths := claudeMdPaths(home, cwd)
-	for _, p := range claudeMdPaths {
+	// --- ClaudeMdFiles ---
+	for _, p := range claudeMdPaths(home, cwd) {
 		if fileExists(p) {
-			toolsAllowed++
+			counts.ClaudeMdFiles++
 		}
 	}
 
-	// Rule files: recursive .md count under rules directories
+	// --- RuleFiles: recursive .md count under rules directories ---
 	if home != "" {
-		toolsAllowed += countMdFilesRecursive(filepath.Join(home, ".claude", "rules"))
+		counts.RuleFiles += countMdFilesRecursive(filepath.Join(home, ".claude", "rules"))
 	}
 	if cwd != "" {
-		toolsAllowed += countMdFilesRecursive(filepath.Join(cwd, ".claude", "rules"))
+		counts.RuleFiles += countMdFilesRecursive(filepath.Join(cwd, ".claude", "rules"))
 	}
 
-	// Hooks: count non-empty hook event arrays across settings files
+	// --- Hooks: count non-empty hook event arrays across settings files ---
 	if home != "" {
-		toolsAllowed += countNonEmptyHooks(filepath.Join(home, ".claude", "settings.json"))
+		counts.Hooks += countNonEmptyHooks(filepath.Join(home, ".claude", "settings.json"))
 	}
 	if cwd != "" {
-		toolsAllowed += countNonEmptyHooks(filepath.Join(cwd, ".claude", "settings.json"))
-		toolsAllowed += countNonEmptyHooks(filepath.Join(cwd, ".claude", "settings.local.json"))
+		counts.Hooks += countNonEmptyHooks(filepath.Join(cwd, ".claude", "settings.json"))
+		counts.Hooks += countNonEmptyHooks(filepath.Join(cwd, ".claude", "settings.local.json"))
 	}
 
-	counts.ToolsAllowed = toolsAllowed
 	return counts
 }
 

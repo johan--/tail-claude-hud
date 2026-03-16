@@ -12,23 +12,31 @@ import (
 
 var envStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
 
-// Env renders a summary of the active environment: MCP servers and allowed tools.
-// Uses nerdfont icons when configured; falls back to unicode or ascii.
-// Returns "" when ctx.EnvCounts is nil.
+// Env renders a compact summary of the active Claude Code environment.
+// Each non-zero category is shown with a letter suffix:
+//
+//	NM = MCP servers, NC = CLAUDE.md files, NR = rule files, NH = hooks
+//
+// Example: "3M 2C 4R 3H". Returns "" when ctx.EnvCounts is nil or all zeros.
 func Env(ctx *model.RenderContext, cfg *config.Config) string {
 	if ctx.EnvCounts == nil {
 		return ""
 	}
 
-	icons := IconsFor(cfg.Style.Icons)
+	ec := ctx.EnvCounts
 	var parts []string
 
-	if ctx.EnvCounts.MCPServers > 0 {
-		parts = append(parts, fmt.Sprintf("%s%d", icons.Spinner, ctx.EnvCounts.MCPServers))
+	if ec.MCPServers > 0 {
+		parts = append(parts, fmt.Sprintf("%dM", ec.MCPServers))
 	}
-
-	if ctx.EnvCounts.ToolsAllowed > 0 {
-		parts = append(parts, fmt.Sprintf("%s%d", icons.Check, ctx.EnvCounts.ToolsAllowed))
+	if ec.ClaudeMdFiles > 0 {
+		parts = append(parts, fmt.Sprintf("%dC", ec.ClaudeMdFiles))
+	}
+	if ec.RuleFiles > 0 {
+		parts = append(parts, fmt.Sprintf("%dR", ec.RuleFiles))
+	}
+	if ec.Hooks > 0 {
+		parts = append(parts, fmt.Sprintf("%dH", ec.Hooks))
 	}
 
 	if len(parts) == 0 {

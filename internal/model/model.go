@@ -78,10 +78,13 @@ type TodoItem struct {
 	Done    bool
 }
 
-// EnvCounts holds counts of active MCP servers and permitted tools.
+// EnvCounts holds counts of active Claude Code environment config items,
+// broken down by category.
 type EnvCounts struct {
-	MCPServers   int
-	ToolsAllowed int
+	MCPServers    int // unique MCP server names across all settings files
+	ClaudeMdFiles int // CLAUDE.md files found at standard paths
+	RuleFiles     int // .md files under ~/.claude/rules and {cwd}/.claude/rules
+	Hooks         int // non-empty hook event arrays across settings files
 }
 
 // GitStatus holds the current git repository state for the working directory.

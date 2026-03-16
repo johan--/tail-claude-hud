@@ -138,8 +138,10 @@ func BenchmarkRender_FullContext(b *testing.B) {
 			},
 		},
 		EnvCounts: &model.EnvCounts{
-			MCPServers:   5,
-			ToolsAllowed: 32,
+			MCPServers:    5,
+			ClaudeMdFiles: 4,
+			RuleFiles:     12,
+			Hooks:         16,
 		},
 		Git: &model.GitStatus{
 			Branch:   "feat/benchmarks",

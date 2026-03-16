@@ -704,28 +704,8 @@ func TestEnvWidget_NilEnvCountsReturnsEmpty(t *testing.T) {
 	}
 }
 
-func TestEnvWidget_ShowsMCPCount(t *testing.T) {
-	ctx := &model.RenderContext{EnvCounts: &model.EnvCounts{MCPServers: 3, ToolsAllowed: 0}}
-	cfg := defaultCfg()
-
-	got := Env(ctx, cfg)
-	if !strings.Contains(got, "3") {
-		t.Errorf("Env: expected '3' in output, got %q", got)
-	}
-}
-
-func TestEnvWidget_ShowsToolsAllowed(t *testing.T) {
-	ctx := &model.RenderContext{EnvCounts: &model.EnvCounts{MCPServers: 0, ToolsAllowed: 5}}
-	cfg := defaultCfg()
-
-	got := Env(ctx, cfg)
-	if !strings.Contains(got, "5") {
-		t.Errorf("Env: expected '5' in output, got %q", got)
-	}
-}
-
 func TestEnvWidget_ZeroCountsReturnsEmpty(t *testing.T) {
-	ctx := &model.RenderContext{EnvCounts: &model.EnvCounts{MCPServers: 0, ToolsAllowed: 0}}
+	ctx := &model.RenderContext{EnvCounts: &model.EnvCounts{}}
 	cfg := defaultCfg()
 
 	if got := Env(ctx, cfg); got != "" {
@@ -733,15 +713,84 @@ func TestEnvWidget_ZeroCountsReturnsEmpty(t *testing.T) {
 	}
 }
 
-func TestEnvWidget_UsesIconLookup(t *testing.T) {
-	ctx := &model.RenderContext{EnvCounts: &model.EnvCounts{MCPServers: 1, ToolsAllowed: 0}}
+func TestEnvWidget_CompactFormat_AllCategories(t *testing.T) {
+	ctx := &model.RenderContext{EnvCounts: &model.EnvCounts{
+		MCPServers:    3,
+		ClaudeMdFiles: 2,
+		RuleFiles:     4,
+		Hooks:         1,
+	}}
 	cfg := defaultCfg()
-	cfg.Style.Icons = "ascii"
 
 	got := Env(ctx, cfg)
-	icons := IconsFor("ascii")
-	if !strings.Contains(got, icons.Spinner) {
-		t.Errorf("Env(ascii): expected spinner icon %q, got %q", icons.Spinner, got)
+	// Each category must appear with its letter suffix.
+	for _, want := range []string{"3M", "2C", "4R", "1H"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("Env compact format: expected %q in output, got %q", want, got)
+		}
+	}
+}
+
+func TestEnvWidget_SkipsZeroCategories(t *testing.T) {
+	// Only MCPs and hooks are non-zero; C and R must not appear.
+	ctx := &model.RenderContext{EnvCounts: &model.EnvCounts{
+		MCPServers: 5,
+		Hooks:      2,
+	}}
+	cfg := defaultCfg()
+
+	got := Env(ctx, cfg)
+	if !strings.Contains(got, "5M") {
+		t.Errorf("Env: expected '5M', got %q", got)
+	}
+	if !strings.Contains(got, "2H") {
+		t.Errorf("Env: expected '2H', got %q", got)
+	}
+	if strings.Contains(got, "C") {
+		t.Errorf("Env: expected no 'C' when ClaudeMdFiles=0, got %q", got)
+	}
+	if strings.Contains(got, "R") {
+		t.Errorf("Env: expected no 'R' when RuleFiles=0, got %q", got)
+	}
+}
+
+func TestEnvWidget_MCPOnly(t *testing.T) {
+	ctx := &model.RenderContext{EnvCounts: &model.EnvCounts{MCPServers: 3}}
+	cfg := defaultCfg()
+
+	got := Env(ctx, cfg)
+	if !strings.Contains(got, "3M") {
+		t.Errorf("Env MCPOnly: expected '3M' in output, got %q", got)
+	}
+}
+
+func TestEnvWidget_ClaudeMdOnly(t *testing.T) {
+	ctx := &model.RenderContext{EnvCounts: &model.EnvCounts{ClaudeMdFiles: 2}}
+	cfg := defaultCfg()
+
+	got := Env(ctx, cfg)
+	if !strings.Contains(got, "2C") {
+		t.Errorf("Env ClaudeMdOnly: expected '2C' in output, got %q", got)
+	}
+}
+
+func TestEnvWidget_RuleFilesOnly(t *testing.T) {
+	ctx := &model.RenderContext{EnvCounts: &model.EnvCounts{RuleFiles: 4}}
+	cfg := defaultCfg()
+
+	got := Env(ctx, cfg)
+	if !strings.Contains(got, "4R") {
+		t.Errorf("Env RuleFilesOnly: expected '4R' in output, got %q", got)
+	}
+}
+
+func TestEnvWidget_HooksOnly(t *testing.T) {
+	ctx := &model.RenderContext{EnvCounts: &model.EnvCounts{Hooks: 3}}
+	cfg := defaultCfg()
+
+	got := Env(ctx, cfg)
+	if !strings.Contains(got, "3H") {
+		t.Errorf("Env HooksOnly: expected '3H' in output, got %q", got)
 	}
 }
 
