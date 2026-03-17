@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"charm.land/lipgloss/v2"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/config"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/gather"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/model"
@@ -61,9 +62,16 @@ func main() {
 	}
 
 	// CLI --theme overrides the theme from config/preset.
+	// When no explicit --theme is given, auto-detect the terminal background
+	// and switch between "light" and "dark" themes for powerline mode.
 	if *themeName != "" {
 		cfg.Style.Theme = *themeName
 		config.ResolveTheme(cfg)
+	} else if cfg.Style.Mode == "powerline" || hasPowerlineLines(cfg) {
+		if detectLightBackground() {
+			cfg.Style.Theme = "light"
+			config.ResolveTheme(cfg)
+		}
 	}
 
 	// Resolve input data from one of three sources.
@@ -297,4 +305,28 @@ func mustCwd() string {
 		cwd = resolved
 	}
 	return cwd
+}
+
+// detectLightBackground tries to detect the terminal background color.
+// It opens /dev/tty directly to bypass piped stdin/stdout (Claude Code pipes
+// all three fds when invoking statusline plugins). Falls back to os.Stderr
+// if /dev/tty isn't available. Returns true for light backgrounds.
+func detectLightBackground() bool {
+	// Try /dev/tty first — works even when all stdio fds are pipes.
+	if tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0); err == nil {
+		defer tty.Close()
+		return !lipgloss.HasDarkBackground(tty, tty)
+	}
+	// Fall back to stderr (works when running from a shell directly).
+	return !lipgloss.HasDarkBackground(os.Stdin, os.Stderr)
+}
+
+// hasPowerlineLines returns true if any configured line uses powerline mode.
+func hasPowerlineLines(cfg *config.Config) bool {
+	for _, line := range cfg.Lines {
+		if line.Mode == "powerline" {
+			return true
+		}
+	}
+	return false
 }
