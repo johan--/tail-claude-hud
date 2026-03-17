@@ -43,10 +43,10 @@ func Git(ctx *model.RenderContext, cfg *config.Config) WidgetResult {
 	// Ahead/behind counts.
 	if cfg.Git.AheadBehind {
 		if g.AheadBy > 0 {
-			parts = append(parts, gitDimStyle.Render(fmt.Sprintf("+%d", g.AheadBy)))
+			parts = append(parts, gitDimStyle.Render(fmt.Sprintf("↑%d", g.AheadBy)))
 		}
 		if g.BehindBy > 0 {
-			parts = append(parts, gitDimStyle.Render(fmt.Sprintf("-%d", g.BehindBy)))
+			parts = append(parts, gitDimStyle.Render(fmt.Sprintf("↓%d", g.BehindBy)))
 		}
 	}
 

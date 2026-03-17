@@ -1081,11 +1081,11 @@ func TestGitWidget_AheadBehindCounts(t *testing.T) {
 	cfg.Git.AheadBehind = true
 
 	got := Git(ctx, cfg).Text
-	if !strings.Contains(got, "+2") {
-		t.Errorf("Git ahead: expected '+2', got %q", got)
+	if !strings.Contains(got, "↑2") {
+		t.Errorf("Git ahead: expected '↑2', got %q", got)
 	}
-	if !strings.Contains(got, "-1") {
-		t.Errorf("Git behind: expected '-1', got %q", got)
+	if !strings.Contains(got, "↓1") {
+		t.Errorf("Git behind: expected '↓1', got %q", got)
 	}
 }
 
