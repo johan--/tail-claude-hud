@@ -7,7 +7,7 @@ var builtins = map[string]Preset{
 	"default": {
 		Name: "default",
 		Lines: []config.Line{
-			{Widgets: []string{"thinking", "model", "context", "project", "todos", "duration"}},
+			{Widgets: []string{"model", "context", "project", "todos", "duration"}},
 			{Widgets: []string{"agents"}},
 			{Widgets: []string{"tools"}},
 		},
@@ -34,7 +34,7 @@ var builtins = map[string]Preset{
 			{Widgets: []string{"model", "context", "cost", "duration", "speed"}},
 			{Widgets: []string{"directory", "git", "lines", "outputstyle"}},
 			{Widgets: []string{"agents", "messages", "skills"}},
-			{Widgets: []string{"thinking", "tools"}},
+			{Widgets: []string{"tools"}},
 		},
 		Separator:      " | ",
 		Icons:          "nerdfont",

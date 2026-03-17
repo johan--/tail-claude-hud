@@ -73,7 +73,7 @@ func TestDefaultPresetMatchesConfigDefaults(t *testing.T) {
 		t.Fatalf("default preset has %d lines, want 3", len(p.Lines))
 	}
 
-	wantLine0 := []string{"thinking", "model", "context", "project", "todos", "duration"}
+	wantLine0 := []string{"model", "context", "project", "todos", "duration"}
 	wantLine1 := []string{"agents"}
 	wantLine2 := []string{"tools"}
 

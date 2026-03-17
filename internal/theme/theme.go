@@ -60,7 +60,7 @@ var darkTheme = Theme{
 	"context":   {Fg: "#cbd5e0", Bg: "#4a5568"},
 	"directory": {Fg: "#ffffff", Bg: "#8b4513"},
 	"git":       {Fg: "#ffffff", Bg: "#404040"},
-	"project":   {Fg: "#ffffff", Bg: "#8b4513"}, // warm brown, matches reference
+	"project":   {Fg: "#87ceeb", Bg: "#2d3a4a"}, // sky blue text on navy
 	"env":       {Fg: "#d0a0d0", Bg: "#2d2d3d"},
 	"duration":  {Fg: "#d1d5db", Bg: "#374151"},
 	"tools":     {Fg: "#87ceeb", Bg: "#2a2a2a"},
@@ -68,7 +68,7 @@ var darkTheme = Theme{
 	"todos":     {Fg: "#98fb98", Bg: "#1a1a1a"},
 	"session":   {Fg: "#00ffff", Bg: "#3a3a4a"},
 	"thinking":  {Fg: "#87ceeb", Bg: "#2a2a2a"},
-	"cost":      {Fg: "#00ffff", Bg: "#202020"},
+	"cost":      {Fg: "#00ffff", Bg: "#1a3a2a"},
 }
 
 // nordTheme uses the Nord color palette (https://www.nordtheme.com/).
