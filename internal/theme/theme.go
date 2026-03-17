@@ -27,6 +27,7 @@ const DefaultPowerlineBg = "236"
 var builtins = map[string]Theme{
 	"default":     defaultTheme,
 	"dark":        darkTheme,
+	"light":       lightTheme,
 	"nord":        nordTheme,
 	"gruvbox":     gruvboxTheme,
 	"tokyo-night": tokyoNightTheme,
@@ -69,6 +70,27 @@ var darkTheme = Theme{
 	"session":   {Fg: "#00ffff", Bg: "#3a3a4a"},
 	"thinking":  {Fg: "#87ceeb", Bg: "#2a2a2a"},
 	"cost":      {Fg: "#00ffff", Bg: "#1a3a2a"},
+}
+
+// lightTheme uses pale, muted backgrounds for light terminal themes.
+// Foreground colors are dark to contrast against the light backgrounds.
+// Each widget gets a subtly different bg so powerline arrows are visible
+// without creating the heavy dark-brick look that dark themes produce
+// on light terminals.
+var lightTheme = Theme{
+	"model":     {Fg: "#1a1a2e", Bg: "#d5d5e0"}, // dark text on cool light gray
+	"context":   {Fg: "#2d3748", Bg: "#c8dbbe"}, // dark text on sage green
+	"directory": {Fg: "#3b2006", Bg: "#e8d5c4"}, // brown text on warm tan
+	"git":       {Fg: "#1a3a4a", Bg: "#c4d9e0"}, // navy text on ice blue
+	"project":   {Fg: "#2d2066", Bg: "#d8d0e8"}, // indigo text on lavender
+	"env":       {Fg: "#4a3060", Bg: "#e0d0e8"}, // purple text on light mauve
+	"duration":  {Fg: "#374151", Bg: "#d8dce0"}, // gray text on cool silver
+	"tools":     {Fg: "#1a3a4a", Bg: "#ccd8dc"}, // navy text on pale steel
+	"agents":    {Fg: "#1a4a2a", Bg: "#c8e0cc"}, // forest text on mint
+	"todos":     {Fg: "#4a3800", Bg: "#e8e0c8"}, // amber text on cream
+	"session":   {Fg: "#2a4050", Bg: "#d0d8e0"}, // slate text on light blue-gray
+	"thinking":  {Fg: "#1a3a4a", Bg: "#ccd8dc"}, // same as tools
+	"cost":      {Fg: "#1a4a2a", Bg: "#c8e0d0"}, // forest text on pale green
 }
 
 // nordTheme uses the Nord color palette (https://www.nordtheme.com/).
@@ -155,7 +177,7 @@ func Load(name string) Theme {
 
 // BuiltinNames returns the sorted list of built-in theme names.
 func BuiltinNames() []string {
-	return []string{"default", "dark", "gruvbox", "nord", "rose-pine", "tokyo-night"}
+	return []string{"default", "dark", "gruvbox", "light", "nord", "rose-pine", "tokyo-night"}
 }
 
 // MergeOverrides returns a new Theme that starts from base and then applies

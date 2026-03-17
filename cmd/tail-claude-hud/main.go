@@ -24,6 +24,7 @@ func main() {
 	listPresets := flag.Bool("list-presets", false, "print available preset names and exit")
 	previewPath := flag.String("preview", "", "render statusline from a transcript file using mock stdin data")
 	presetName := flag.String("preset", "", "apply a named preset or TOML file path")
+	themeName := flag.String("theme", "", "override the color theme (e.g. light, dark, nord)")
 	watch := flag.Bool("watch", false, "continuously re-render on transcript changes (requires --preview)")
 	flag.Parse()
 
@@ -57,6 +58,12 @@ func main() {
 			os.Exit(1)
 		}
 		preset.ApplyPreset(cfg, p)
+	}
+
+	// CLI --theme overrides the theme from config/preset.
+	if *themeName != "" {
+		cfg.Style.Theme = *themeName
+		config.ResolveTheme(cfg)
 	}
 
 	// Resolve input data from one of three sources.
