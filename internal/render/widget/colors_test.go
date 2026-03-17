@@ -1,6 +1,7 @@
 package widget
 
 import (
+	"strings"
 	"testing"
 
 	"charm.land/lipgloss/v2"
@@ -86,6 +87,64 @@ func TestModelFamilyColor_DefaultReturnsCyan(t *testing.T) {
 		got := ModelFamilyColor(name).Render("X")
 		if got != want {
 			t.Errorf("ModelFamilyColor(%q) did not return bright cyan (ANSI 14); got %q", name, got)
+		}
+	}
+}
+
+// -- Text hierarchy styles ----------------------------------------------------
+
+// TestTextHierarchyStyles_Distinct verifies that the four named hierarchy styles
+// produce distinct ANSI escape sequences and that each style has the expected
+// attributes (bold, faint, color 8, or plain).
+func TestTextHierarchyStyles_Distinct(t *testing.T) {
+	const input = "test"
+
+	primary := PrimaryStyle.Render(input)
+	secondary := SecondaryStyle.Render(input)
+	dim := DimStyle.Render(input)
+	muted := MutedStyle.Render(input)
+
+	// PrimaryStyle must contain the bold escape code (ESC[1m).
+	if !strings.Contains(primary, "\x1b[1m") {
+		t.Errorf("PrimaryStyle.Render(%q) = %q, want bold escape \\x1b[1m", input, primary)
+	}
+
+	// DimStyle must contain the faint escape code (ESC[2m).
+	if !strings.Contains(dim, "\x1b[2m") {
+		t.Errorf("DimStyle.Render(%q) = %q, want faint escape \\x1b[2m", input, dim)
+	}
+
+	// MutedStyle must contain a color escape sequence (ANSI 256-color or bright black).
+	// lipgloss renders Color("8") as ESC[90m (bright black via high-intensity black).
+	if !strings.Contains(muted, "\x1b[") {
+		t.Errorf("MutedStyle.Render(%q) = %q, want color escape sequence", input, muted)
+	}
+	// Confirm it uses the bright-black (color 8) code, not bold or faint.
+	if strings.Contains(muted, "\x1b[1m") || strings.Contains(muted, "\x1b[2m") {
+		t.Errorf("MutedStyle.Render(%q) = %q, must use color attribute not bold/faint", input, muted)
+	}
+
+	// SecondaryStyle must NOT contain bold, faint, or color codes — it's plain terminal default.
+	if strings.Contains(secondary, "\x1b[") {
+		t.Errorf("SecondaryStyle.Render(%q) = %q, want no escape sequences", input, secondary)
+	}
+
+	// All four styles must produce distinct output for the same input.
+	outputs := []struct {
+		name   string
+		output string
+	}{
+		{"PrimaryStyle", primary},
+		{"SecondaryStyle", secondary},
+		{"DimStyle", dim},
+		{"MutedStyle", muted},
+	}
+	for i := 0; i < len(outputs); i++ {
+		for j := i + 1; j < len(outputs); j++ {
+			if outputs[i].output == outputs[j].output {
+				t.Errorf("%s and %s produce identical output %q — styles must be distinct",
+					outputs[i].name, outputs[j].name, outputs[i].output)
+			}
 		}
 	}
 }

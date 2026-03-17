@@ -48,6 +48,30 @@ func AgentColorStyle(colorIndex int) lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(lipgloss.Color(color))
 }
 
+// Text hierarchy styles — four semantic levels of visual emphasis.
+// Widgets choose their level based on information volatility:
+// primary for changing/urgent data, muted for static metadata.
+var (
+	// PrimaryStyle is tier 1: bold emphasis for the most important dynamic data.
+	// Used for: model name, context at warning/critical, running tool icons.
+	PrimaryStyle = lipgloss.NewStyle().Bold(true)
+
+	// SecondaryStyle is tier 2: normal emphasis for stable context data.
+	// Uses terminal default foreground — no color or attribute override.
+	// Used for: git branch, project name, agent names.
+	SecondaryStyle = lipgloss.NewStyle()
+
+	// DimStyle is tier 3: faint emphasis for supporting detail.
+	// Equivalent to the existing dimStyle in context.go.
+	// Used for: completed tool names, elapsed times, separators.
+	DimStyle = lipgloss.NewStyle().Faint(true)
+
+	// MutedStyle is tier 4: ANSI bright black for static metadata.
+	// Visually distinct from DimStyle (Faint) — uses explicit color instead of attribute.
+	// Used for: session ID, env counts, message counts, token counts.
+	MutedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+)
+
 var (
 	opusStyle         = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
 	sonnetStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
