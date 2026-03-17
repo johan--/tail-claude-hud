@@ -38,6 +38,10 @@ dump: build
 run-sample:
     cat testdata/sample-stdin.json | go run ./cmd/tail-claude-hud
 
+# Run design evaluation
+eval:
+    go test ./internal/eval/ -run TestDesignEval -v -count=1
+
 # Clean build artifacts
 clean:
     rm -rf bin/
