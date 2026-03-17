@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	gitBranchStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("87"))
+	gitBranchStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
 	gitDimStyle    = lipgloss.NewStyle().Faint(true)
 )
 

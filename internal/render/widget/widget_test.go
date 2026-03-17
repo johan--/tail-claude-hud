@@ -1894,29 +1894,23 @@ func TestWidgetResult_IsEmpty(t *testing.T) {
 	}
 }
 
-// TestWidgetResult_PlainModeOutputIdentical verifies that simple widgets expose
-// the correct Text and FgColor for the renderer to apply. This is the
-// behavioral-equivalence check required by spec 5: when the renderer applies
-// FgColor to Text, the output must match what the old envStyle.Render produced.
+// TestWidgetResult_PlainModeOutputIdentical verifies that the env widget
+// pre-styles its output with Faint and returns empty FgColor (pass-through
+// pattern), consistent with dimStyle widgets like session and messages.
 func TestWidgetResult_PlainModeOutputIdentical(t *testing.T) {
-	// Env widget uses FgColor="245" — the renderer applies that color.
+	// Env widget uses envStyle.Render (Faint) and leaves FgColor empty.
 	ctx := &model.RenderContext{EnvCounts: &model.EnvCounts{MCPServers: 3, Hooks: 2}}
 	cfg := defaultCfg()
 
 	result := Env(ctx, cfg)
-	if result.FgColor != "245" {
-		t.Errorf("Env FgColor: expected '245', got %q", result.FgColor)
-	}
-	if result.Text != "3M 2H" {
-		t.Errorf("Env Text: expected '3M 2H', got %q", result.Text)
+	if result.FgColor != "" {
+		t.Errorf("Env FgColor: expected '' (pre-styled), got %q", result.FgColor)
 	}
 
-	// Verify that applying FgColor to Text produces the same output as envStyle directly.
+	// The pre-styled Text must equal envStyle.Render("3M 2H").
 	want := envStyle.Render("3M 2H")
-	style := lipgloss.NewStyle().Foreground(lipgloss.Color(result.FgColor))
-	got := style.Render(result.Text)
-	if got != want {
-		t.Errorf("renderer-equivalent output: expected %q, got %q", want, got)
+	if result.Text != want {
+		t.Errorf("Env Text: expected pre-styled %q, got %q", want, result.Text)
 	}
 }
 

@@ -11,8 +11,8 @@ import (
 )
 
 var (
-	linesAddedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("82"))  // bright green
-	linesRemovedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196")) // bright red
+	linesAddedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("10")) // ANSI bright green
+	linesRemovedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))  // ANSI bright red
 )
 
 // Lines renders the lines added and removed during the current session.

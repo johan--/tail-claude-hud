@@ -11,7 +11,7 @@ import (
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/model"
 )
 
-var dirStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("141")).Bold(true)
+var dirStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("13")).Bold(true)
 
 // Directory renders the current working directory from ctx.Cwd using the
 // style configured in cfg.Directory.Style:

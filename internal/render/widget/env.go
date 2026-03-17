@@ -10,7 +10,7 @@ import (
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/model"
 )
 
-var envStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+var envStyle = lipgloss.NewStyle().Faint(true)
 
 // Env renders a compact summary of the active Claude Code environment.
 // Each non-zero category is shown with a letter suffix:
@@ -43,5 +43,5 @@ func Env(ctx *model.RenderContext, cfg *config.Config) WidgetResult {
 		return WidgetResult{}
 	}
 
-	return WidgetResult{Text: strings.Join(parts, " "), FgColor: "245"}
+	return WidgetResult{Text: envStyle.Render(strings.Join(parts, " "))}
 }

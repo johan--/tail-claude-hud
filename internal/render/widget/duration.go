@@ -11,7 +11,7 @@ import (
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/model"
 )
 
-var durationStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+var durationStyle = lipgloss.NewStyle().Faint(true)
 
 // Duration renders the session elapsed time.
 //
@@ -29,7 +29,7 @@ func Duration(ctx *model.RenderContext, cfg *config.Config) WidgetResult {
 	// Prefer the authoritative duration from stdin when available.
 	if ctx.TotalDurationMs > 0 {
 		elapsed := time.Duration(ctx.TotalDurationMs) * time.Millisecond
-		return WidgetResult{Text: fmt.Sprintf("%s%s", icons.Clock, formatElapsed(elapsed)), FgColor: "245"}
+		return WidgetResult{Text: durationStyle.Render(fmt.Sprintf("%s%s", icons.Clock, formatElapsed(elapsed)))}
 	}
 
 	// Fall back to transcript-derived start time.
@@ -40,11 +40,11 @@ func Duration(ctx *model.RenderContext, cfg *config.Config) WidgetResult {
 	start, err := time.Parse(time.RFC3339, ctx.SessionStart)
 	if err != nil {
 		// SessionStart may already be a pre-formatted string — render as-is.
-		return WidgetResult{Text: fmt.Sprintf("%s%s", icons.Clock, ctx.SessionStart), FgColor: "245"}
+		return WidgetResult{Text: durationStyle.Render(fmt.Sprintf("%s%s", icons.Clock, ctx.SessionStart))}
 	}
 
 	elapsed := time.Since(start)
-	return WidgetResult{Text: fmt.Sprintf("%s%s", icons.Clock, formatElapsed(elapsed)), FgColor: "245"}
+	return WidgetResult{Text: durationStyle.Render(fmt.Sprintf("%s%s", icons.Clock, formatElapsed(elapsed)))}
 }
 
 // formatElapsed formats a duration as "Xh Ym" or "Ym Xs".
