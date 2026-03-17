@@ -1324,7 +1324,7 @@ func TestModelWidget_UnknownRendersInCyan(t *testing.T) {
 // -- colorStyle helper --------------------------------------------------------
 
 func TestColorStyle_EmptyStringReturnsFallback(t *testing.T) {
-	fallback := lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+	fallback := lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
 	got := colorStyle("", fallback)
 	// The returned style should equal the fallback (same ANSI output).
 	text := "test"
@@ -1334,12 +1334,12 @@ func TestColorStyle_EmptyStringReturnsFallback(t *testing.T) {
 }
 
 func TestColorStyle_NonEmptyStringCreatesNewStyle(t *testing.T) {
-	fallback := lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	override := colorStyle("196", fallback)
+	fallback := lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
+	override := colorStyle("1", fallback)
 	// The override style must differ from the fallback (different color).
 	text := "test"
 	if override.Render(text) == fallback.Render(text) {
-		t.Errorf("colorStyle(\"196\", fallback) should differ from fallback, both rendered %q", override.Render(text))
+		t.Errorf("colorStyle(\"1\", fallback) should differ from fallback, both rendered %q", override.Render(text))
 	}
 }
 

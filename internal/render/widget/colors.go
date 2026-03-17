@@ -6,9 +6,10 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// agentColors is the 8-color palette for agent identity, matching tail-claude's team colors.
-// Indexed as: blue, green, red, yellow, purple, cyan, orange, pink.
-var agentColors = [8]string{"75", "114", "196", "220", "135", "87", "208", "219"}
+// agentColors is the 8-color palette for agent identity, using ANSI 16 codes so colors
+// adapt to the terminal's own palette.
+// Indexed as: bright blue, bright green, bright red, bright yellow, bright magenta, bright cyan, yellow, magenta.
+var agentColors = [8]string{"12", "10", "9", "11", "13", "14", "3", "5"}
 
 // circleSliceIcons are Nerd Font circle-slice characters representing fill levels 1/8 through
 // 8/8 (U+F0A9E–U+F0AA5). Index 0 is nearly empty, index 7 is fully filled.
@@ -48,10 +49,10 @@ func AgentColorStyle(colorIndex int) lipgloss.Style {
 }
 
 var (
-	opusStyle         = lipgloss.NewStyle().Foreground(lipgloss.Color("204"))
-	sonnetStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("75"))
-	haikuStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("114"))
-	defaultModelStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("87"))
+	opusStyle         = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+	sonnetStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
+	haikuStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
+	defaultModelStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
 )
 
 // ModelFamily returns the model family name ("opus", "sonnet", "haiku") from
@@ -72,10 +73,10 @@ func ModelFamily(modelName string) string {
 
 // ModelFamilyColor returns a foreground lipgloss.Style based on the Claude model family.
 // Detection is case-insensitive via strings.Contains on the lowercased model name:
-//   - "opus"   → coral (204)
-//   - "sonnet" → blue (75)
-//   - "haiku"  → green (114)
-//   - default  → cyan (87)
+//   - "opus"   → bright red (ANSI 9)
+//   - "sonnet" → bright blue (ANSI 12)
+//   - "haiku"  → bright green (ANSI 10)
+//   - default  → bright cyan (ANSI 14)
 func ModelFamilyColor(modelName string) lipgloss.Style {
 	switch ModelFamily(modelName) {
 	case "opus":

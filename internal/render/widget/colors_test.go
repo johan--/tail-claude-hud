@@ -48,44 +48,44 @@ func TestAgentColorStyle_LargeIndexWraps(t *testing.T) {
 
 func TestModelFamilyColor_OpusDetectedCaseInsensitive(t *testing.T) {
 	cases := []string{"opus", "Opus", "OPUS", "claude-opus-4", "Claude Opus 4.6"}
-	want := lipgloss.NewStyle().Foreground(lipgloss.Color("204")).Render("X")
+	want := lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render("X")
 	for _, name := range cases {
 		got := ModelFamilyColor(name).Render("X")
 		if got != want {
-			t.Errorf("ModelFamilyColor(%q) did not return coral(204); got %q", name, got)
+			t.Errorf("ModelFamilyColor(%q) did not return bright red (ANSI 9); got %q", name, got)
 		}
 	}
 }
 
 func TestModelFamilyColor_SonnetDetectedCaseInsensitive(t *testing.T) {
 	cases := []string{"sonnet", "Sonnet", "SONNET", "claude-sonnet-4-6", "Claude Sonnet 4.6"}
-	want := lipgloss.NewStyle().Foreground(lipgloss.Color("75")).Render("X")
+	want := lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Render("X")
 	for _, name := range cases {
 		got := ModelFamilyColor(name).Render("X")
 		if got != want {
-			t.Errorf("ModelFamilyColor(%q) did not return blue(75); got %q", name, got)
+			t.Errorf("ModelFamilyColor(%q) did not return bright blue (ANSI 12); got %q", name, got)
 		}
 	}
 }
 
 func TestModelFamilyColor_HaikuDetectedCaseInsensitive(t *testing.T) {
 	cases := []string{"haiku", "Haiku", "HAIKU", "claude-haiku-3-5", "Claude Haiku 4.5"}
-	want := lipgloss.NewStyle().Foreground(lipgloss.Color("114")).Render("X")
+	want := lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Render("X")
 	for _, name := range cases {
 		got := ModelFamilyColor(name).Render("X")
 		if got != want {
-			t.Errorf("ModelFamilyColor(%q) did not return green(114); got %q", name, got)
+			t.Errorf("ModelFamilyColor(%q) did not return bright green (ANSI 10); got %q", name, got)
 		}
 	}
 }
 
 func TestModelFamilyColor_DefaultReturnsCyan(t *testing.T) {
 	cases := []string{"", "gpt-4o", "gemini-pro", "unknown-model"}
-	want := lipgloss.NewStyle().Foreground(lipgloss.Color("87")).Render("X")
+	want := lipgloss.NewStyle().Foreground(lipgloss.Color("14")).Render("X")
 	for _, name := range cases {
 		got := ModelFamilyColor(name).Render("X")
 		if got != want {
-			t.Errorf("ModelFamilyColor(%q) did not return cyan(87); got %q", name, got)
+			t.Errorf("ModelFamilyColor(%q) did not return bright cyan (ANSI 14); got %q", name, got)
 		}
 	}
 }

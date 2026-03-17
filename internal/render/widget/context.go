@@ -12,9 +12,9 @@ import (
 
 var (
 	dimStyle    = lipgloss.NewStyle().Faint(true)
-	greenStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	yellowStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("220"))
-	redStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+	greenStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
+	yellowStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
+	redStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
 )
 
 // colorStyle returns a lipgloss.Style using the given color string. If colorName
