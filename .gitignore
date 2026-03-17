@@ -2,8 +2,10 @@
 bin/
 
 # Agent artifacts
-.agent-history/
-.ralph-ban/
+.agent-history
+.ralph-ban
 
 # Cloned upstream sources for worker reference
-.cloned-sources/
+.cloned-sources
+.beads-lite
+.claude/agents
