@@ -4,8 +4,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/config"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/gather"
@@ -21,6 +24,7 @@ func main() {
 	listPresets := flag.Bool("list-presets", false, "print available preset names and exit")
 	previewPath := flag.String("preview", "", "render statusline from a transcript file using mock stdin data")
 	presetName := flag.String("preset", "", "apply a named preset or TOML file path (requires --preview)")
+	watch := flag.Bool("watch", false, "continuously re-render on transcript changes (requires --preview)")
 	flag.Parse()
 
 	if *listPresets {
@@ -28,6 +32,11 @@ func main() {
 			fmt.Println(name)
 		}
 		return
+	}
+
+	if *watch && *previewPath == "" {
+		fmt.Fprintf(os.Stderr, "tail-claude-hud: --watch requires --preview\n")
+		os.Exit(1)
 	}
 
 	if *presetName != "" && *previewPath == "" {
@@ -55,6 +64,10 @@ func main() {
 
 		ctx := gather.Gather(input, cfg)
 		render.Render(os.Stdout, ctx, cfg)
+
+		if *watch {
+			watchAndRender(*previewPath, input, cfg)
+		}
 		return
 	}
 
@@ -115,6 +128,51 @@ func resolvePreset(value string) (preset.Preset, error) {
 
 	available := preset.ListAll()
 	return preset.Preset{}, fmt.Errorf("--preset: unknown preset %q (available: %s)", value, strings.Join(available, ", "))
+}
+
+// watchAndRender polls the transcript file every 500ms and re-renders the
+// statusline whenever the file size or mtime changes. It exits cleanly on
+// SIGINT or SIGTERM. The mock stdin data (model, cost, context window) stays
+// constant — only the transcript content changes between re-renders.
+func watchAndRender(path string, input *model.StdinData, cfg *config.Config) {
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
+
+	lastSize, lastMod := statFile(path)
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	fmt.Fprintf(os.Stderr, "\x1b[2m Watching %s — Ctrl+C to stop\x1b[0m\n", filepath.Base(path))
+
+	for {
+		select {
+		case <-sigCh:
+			return
+		case <-ticker.C:
+			size, mod := statFile(path)
+			if size == lastSize && mod == lastMod {
+				continue
+			}
+			lastSize, lastMod = size, mod
+			// Clear screen and move cursor to top-left before re-rendering.
+			fmt.Fprint(os.Stdout, "\x1b[2J\x1b[H")
+			ctx := gather.Gather(input, cfg)
+			render.Render(os.Stdout, ctx, cfg)
+			fmt.Fprintf(os.Stderr, "\x1b[2m Watching %s — Ctrl+C to stop\x1b[0m\n", filepath.Base(path))
+		}
+	}
+}
+
+// statFile returns the size and mtime of path. When the file cannot be
+// stat'd (e.g. temporarily deleted), it returns -1,-1 so a subsequent
+// successful stat will trigger a re-render once the file reappears.
+func statFile(path string) (int64, int64) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return -1, -1
+	}
+	return info.Size(), info.ModTime().UnixNano()
 }
 
 // readFromFile loads the last-stdin snapshot (model, context window) and

@@ -1,12 +1,16 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/kylesnowschwartz/tail-claude-hud/internal/config"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/preset"
+	"github.com/kylesnowschwartz/tail-claude-hud/internal/stdin"
 )
 
 // writeTempTranscript creates a temporary .jsonl transcript file and returns its path.
@@ -174,6 +178,85 @@ func TestResolvePreset_TomlSuffix(t *testing.T) {
 	_, err := resolvePreset(presetFile)
 	if err != nil && strings.Contains(err.Error(), "unknown preset") {
 		t.Error("a .toml-suffixed path should route to LoadFromFile, not name lookup")
+	}
+}
+
+func TestStatFile_ExistingFile(t *testing.T) {
+	path := writeTempTranscript(t, `{"type":"init"}`)
+
+	size, mod := statFile(path)
+	if size <= 0 {
+		t.Errorf("expected positive size, got %d", size)
+	}
+	if mod == 0 {
+		t.Error("expected non-zero mtime")
+	}
+}
+
+func TestStatFile_MissingFile(t *testing.T) {
+	size, mod := statFile("/nonexistent/path/file.jsonl")
+	if size != -1 || mod != -1 {
+		t.Errorf("expected -1,-1 for missing file, got %d,%d", size, mod)
+	}
+}
+
+// TestWatchAndRender_DetectsFileChange verifies that watchAndRender triggers
+// a re-render when the transcript file changes. It sends SIGINT after the
+// re-render to exit the loop.
+func TestWatchAndRender_DetectsFileChange(t *testing.T) {
+	path := writeTempTranscript(t, `{"type":"init"}`)
+	input := stdin.MockStdinData(path)
+	cfg := config.LoadHud()
+
+	// Capture stdout to confirm re-render produces output.
+	origStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	os.Stdout = w
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		watchAndRender(path, input, cfg)
+	}()
+
+	// Wait for the watcher to start, then modify the file.
+	time.Sleep(150 * time.Millisecond)
+	if err := os.WriteFile(path, []byte(`{"type":"init"}`+"\n"), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	// Give the watcher up to 1s to detect the change and re-render.
+	time.Sleep(700 * time.Millisecond)
+
+	// Signal exit.
+	w.Close()
+	os.Stdout = origStdout
+
+	// Read what was written.
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	r.Close()
+
+	select {
+	case <-done:
+		// watchAndRender exited — send SIGINT if it's still running
+	default:
+		// Send SIGINT to the process to stop the watcher.
+		p, _ := os.FindProcess(os.Getpid())
+		p.Signal(os.Interrupt)
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Error("watchAndRender did not exit within 2s after SIGINT")
+		}
+	}
+
+	// The clear-screen escape should appear in the captured output if a re-render occurred.
+	if !strings.Contains(buf.String(), "\x1b[2J") {
+		t.Error("expected clear-screen ANSI sequence in output after file change")
 	}
 }
 
