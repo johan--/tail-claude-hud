@@ -33,8 +33,8 @@ var builtins = map[string]Preset{
 		Lines: []config.Line{
 			{Widgets: []string{"model", "context", "project", "cost", "duration"}},
 			{Widgets: []string{"lines", "tokens", "speed", "messages"}},
-			{Widgets: []string{"tools"}},
 			{Widgets: []string{"agents"}},
+			{Widgets: []string{"tools"}},
 		},
 		Separator:      " | ",
 		Icons:          "nerdfont",

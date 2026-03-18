@@ -91,7 +91,7 @@ func IconsFor(mode string) Icons {
 			Clock:    "\uf017",     // nf-fa-clock_o
 			Folder:   "\uf07b",     // nf-fa-folder
 			Branch:   "",          // nf-pl-branch
-			Read:     "\ue28b",     // nf-fae-book_open_o
+			Read:     "",          // nf-fae-book_open_o
 			Edit:     "\uee75",     // nf-fa-pen_nib
 			Write:    "\uee75",     // nf-fa-pen_nib (same glyph as Edit)
 			Bash:     "\U000F0BE0", // nf-md-wrench_outline
