@@ -52,26 +52,9 @@ func Tools(ctx *model.RenderContext, cfg *config.Config) WidgetResult {
 
 	var parts []string
 	var plainParts []string
-	hasRunning := false
-	hasError := false
 	for _, t := range visible {
 		parts = append(parts, renderToolEntry(icons, t))
 		plainParts = append(plainParts, renderToolEntryPlain(icons, t))
-		if !t.Completed {
-			hasRunning = true
-		}
-		if t.HasError {
-			hasError = true
-		}
-	}
-
-	// Determine dominant fg color: yellow if running, red if errored, green if all complete.
-	fgColor := "2" // all complete
-	if hasError {
-		fgColor = "1"
-	}
-	if hasRunning {
-		fgColor = "3"
 	}
 
 	// Compute the highlighted separator position using wrapping ticker logic.
@@ -83,7 +66,7 @@ func Tools(ctx *model.RenderContext, cfg *config.Config) WidgetResult {
 		return WidgetResult{
 			Text:      joinWithHighlight(parts, -1),
 			PlainText: joinPlain(plainParts),
-			FgColor:   fgColor,
+			FgColor:   "",
 		}
 	}
 	highlightIdx := ctx.Transcript.DividerOffset % numSeps
@@ -91,7 +74,7 @@ func Tools(ctx *model.RenderContext, cfg *config.Config) WidgetResult {
 	return WidgetResult{
 		Text:      joinWithHighlight(parts, highlightIdx),
 		PlainText: joinPlain(plainParts),
-		FgColor:   fgColor,
+		FgColor:   "",
 	}
 }
 

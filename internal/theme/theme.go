@@ -45,11 +45,14 @@ var defaultTheme = Theme{
 	"project":   {Fg: "75", Bg: ""}, // blue
 	"env":       {Fg: "135", Bg: ""},
 	"duration":  {Fg: "244", Bg: ""},
-	"tools":     {Fg: "75", Bg: ""},
-	"agents":    {Fg: "114", Bg: ""},
-	"todos":     {Fg: "220", Bg: ""},
-	"session":   {Fg: "87", Bg: ""},
-	"thinking":  {Fg: "220", Bg: ""},
+	// Multi-style widgets handle their own fg internally (green icons, yellow
+	// running, red errors, yellow/dim separators). Theme fg is intentionally
+	// empty so plain mode preserves per-element ANSI styling within these widgets.
+	"tools":    {Fg: "", Bg: ""},
+	"agents":   {Fg: "", Bg: ""},
+	"todos":    {Fg: "", Bg: ""},
+	"session":  {Fg: "87", Bg: ""},
+	"thinking": {Fg: "", Bg: ""},
 	"cost":      {Fg: "87", Bg: ""},
 }
 
