@@ -338,11 +338,15 @@ func discoverSubagents(transcriptPath string) []model.AgentEntry {
 			startTime = info.ModTime()
 		}
 
-		// Read .meta.json sidecar for the agentType display name.
-		// Falls back to the raw agentID when the sidecar is missing.
-		displayName := agentID
-		if at := readAgentType(filepath.Join(subagentsDir, "agent-"+agentID+".meta.json")); at != "" {
-			displayName = at
+		// Read .meta.json sidecar to determine the display name.
+		// Prefer description (human task name), fall back to agentType ("rb-worker"),
+		// then the raw hex UUID as last resort.
+		meta := readAgentMeta(filepath.Join(subagentsDir, "agent-"+agentID+".meta.json"))
+		displayName := agentID // fallback: raw hex UUID
+		if meta.description != "" {
+			displayName = meta.description // best: "Add regression tests"
+		} else if meta.agentType != "" {
+			displayName = meta.agentType // ok: "Explore", "Plan"
 		}
 
 		agents = append(agents, model.AgentEntry{
@@ -397,56 +401,69 @@ func parseFirstEntry(path string) firstEntryInfo {
 	}
 }
 
-// readAgentType reads a .meta.json sidecar file and returns the agentType
-// field. Returns "" when the file is missing, empty, or lacks the field.
-func readAgentType(path string) string {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return ""
-	}
-	var meta struct {
-		AgentType string `json:"agentType"`
-	}
-	if json.Unmarshal(data, &meta) != nil {
-		return ""
-	}
-	return meta.AgentType
+// agentMeta holds the parsed fields from a .meta.json sidecar file.
+type agentMeta struct {
+	agentType   string
+	description string
 }
 
-// mergeSubagents makes filesystem agents authoritative for timing while
-// enriching them with transcript metadata (Model, Description).
-// Filesystem agents have accurate StartTime and DurationMs derived from
-// file timestamps; transcript agents have model and description fields.
+// readAgentMeta reads a .meta.json sidecar file and returns both the agentType
+// and description fields. Returns a zero agentMeta when the file is missing,
+// empty, or unparseable.
+func readAgentMeta(path string) agentMeta {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return agentMeta{}
+	}
+	var meta struct {
+		AgentType   string `json:"agentType"`
+		Description string `json:"description"`
+	}
+	if json.Unmarshal(data, &meta) != nil {
+		return agentMeta{}
+	}
+	return agentMeta{agentType: meta.AgentType, description: meta.Description}
+}
+
+// mergeSubagents is a union merge that keeps transcript agents as the base.
+// For each filesystem agent:
+//   - If a matching transcript agent exists (by Name), overwrite StartTime,
+//     DurationMs, Status, and ID from the filesystem entry while preserving
+//     Model and Description from the transcript entry.
+//   - If no match exists, append the filesystem agent.
+//
+// Transcript-only agents (cleaned up files, warmup-filtered, compact-filtered)
+// are never removed. When multiple transcript agents share the same Name, the
+// filesystem agent matches the first unmatched one.
 func mergeSubagents(td *model.TranscriptData, fsAgents []model.AgentEntry) {
 	if len(fsAgents) == 0 {
 		return
 	}
 
-	// Index transcript agents by name for metadata enrichment.
-	// When multiple transcript agents share a name, prefer the first unmatched one.
+	// Build a name → list-of-indices map so same-name agents can be matched
+	// one-for-one without a second matching stealing the same slot.
 	byName := make(map[string][]int, len(td.Agents))
 	for i, a := range td.Agents {
 		byName[a.Name] = append(byName[a.Name], i)
 	}
 
-	// Enrich filesystem agents with transcript metadata.
-	enriched := make([]model.AgentEntry, len(fsAgents))
-	copy(enriched, fsAgents)
-
-	matchedTranscript := make(map[int]bool)
-	for i, fa := range enriched {
-		if indices, ok := byName[fa.Name]; ok {
-			for _, idx := range indices {
-				if !matchedTranscript[idx] {
-					matchedTranscript[idx] = true
-					enriched[i].Model = td.Agents[idx].Model
-					enriched[i].Description = td.Agents[idx].Description
-					break
-				}
+	matched := make(map[int]bool)
+	for _, fa := range fsAgents {
+		bestIdx := -1
+		for _, idx := range byName[fa.Name] {
+			if !matched[idx] {
+				bestIdx = idx
+				break
 			}
 		}
+		if bestIdx >= 0 {
+			matched[bestIdx] = true
+			td.Agents[bestIdx].StartTime = fa.StartTime
+			td.Agents[bestIdx].DurationMs = fa.DurationMs
+			td.Agents[bestIdx].Status = fa.Status
+			td.Agents[bestIdx].ID = fa.ID
+		} else {
+			td.Agents = append(td.Agents, fa)
+		}
 	}
-
-	// Replace transcript agents with enriched filesystem agents.
-	td.Agents = enriched
 }

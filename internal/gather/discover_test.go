@@ -275,14 +275,17 @@ func TestDiscoverSubagents_ComputesDuration(t *testing.T) {
 	}
 }
 
+// TestMergeSubagents_EnrichesFromTranscript verifies that a filesystem agent
+// matched by Name overwrites timing fields while preserving transcript metadata.
 func TestMergeSubagents_EnrichesFromTranscript(t *testing.T) {
+	start := time.Now().Add(-10 * time.Second)
 	td := &model.TranscriptData{
 		Agents: []model.AgentEntry{
 			{Name: "worker", Status: "completed", Model: "claude-haiku-4-5", Description: "do the thing", DurationMs: 5},
 		},
 	}
 	fsAgents := []model.AgentEntry{
-		{ID: "abc123", Name: "worker", Status: "completed", StartTime: time.Now().Add(-10 * time.Second), DurationMs: 10000},
+		{ID: "abc123", Name: "worker", Status: "completed", StartTime: start, DurationMs: 10000},
 	}
 
 	mergeSubagents(td, fsAgents)
@@ -295,6 +298,12 @@ func TestMergeSubagents_EnrichesFromTranscript(t *testing.T) {
 	if a.DurationMs != 10000 {
 		t.Errorf("expected DurationMs 10000 from filesystem, got %d", a.DurationMs)
 	}
+	if !a.StartTime.Equal(start) {
+		t.Errorf("expected StartTime from filesystem, got %v", a.StartTime)
+	}
+	if a.ID != "abc123" {
+		t.Errorf("expected ID 'abc123' from filesystem, got %q", a.ID)
+	}
 	// Transcript metadata is preserved.
 	if a.Model != "claude-haiku-4-5" {
 		t.Errorf("expected Model 'claude-haiku-4-5' from transcript, got %q", a.Model)
@@ -302,26 +311,100 @@ func TestMergeSubagents_EnrichesFromTranscript(t *testing.T) {
 	if a.Description != "do the thing" {
 		t.Errorf("expected Description 'do the thing' from transcript, got %q", a.Description)
 	}
-	// Filesystem ID preserved.
-	if a.ID != "abc123" {
-		t.Errorf("expected ID 'abc123', got %q", a.ID)
+}
+
+// TestMergeSubagents_PreservesTranscriptOnlyAgents verifies that transcript
+// agents with no filesystem match are not removed from td.Agents.
+func TestMergeSubagents_PreservesTranscriptOnlyAgents(t *testing.T) {
+	td := &model.TranscriptData{
+		Agents: []model.AgentEntry{
+			{Name: "transcript-only", Status: "completed", Model: "claude-3-5"},
+			{Name: "matched", Status: "completed"},
+		},
+	}
+	fsAgents := []model.AgentEntry{
+		{ID: "fs1", Name: "matched", Status: "completed", DurationMs: 5000},
+	}
+
+	mergeSubagents(td, fsAgents)
+
+	if len(td.Agents) != 2 {
+		t.Fatalf("expected 2 agents (transcript-only preserved), got %d", len(td.Agents))
+	}
+	// First agent unchanged.
+	if td.Agents[0].Name != "transcript-only" {
+		t.Errorf("expected first agent 'transcript-only', got %q", td.Agents[0].Name)
+	}
+	if td.Agents[0].Model != "claude-3-5" {
+		t.Errorf("expected Model preserved on transcript-only agent, got %q", td.Agents[0].Model)
 	}
 }
 
-func TestMergeSubagents_EmptyFsAgents(t *testing.T) {
+// TestMergeSubagents_AppendsUnmatchedFsAgents verifies that a filesystem agent
+// with no transcript match is appended to td.Agents.
+func TestMergeSubagents_AppendsUnmatchedFsAgents(t *testing.T) {
 	td := &model.TranscriptData{
 		Agents: []model.AgentEntry{
 			{Name: "existing", Status: "running"},
 		},
 	}
-
-	mergeSubagents(td, nil)
-
-	if len(td.Agents) != 1 {
-		t.Fatalf("expected 1 agent unchanged, got %d", len(td.Agents))
+	fsAgents := []model.AgentEntry{
+		{ID: "new1", Name: "brand-new", Status: "completed", DurationMs: 3000},
 	}
-	if td.Agents[0].Name != "existing" {
-		t.Errorf("expected agent name 'existing', got %q", td.Agents[0].Name)
+
+	mergeSubagents(td, fsAgents)
+
+	if len(td.Agents) != 2 {
+		t.Fatalf("expected 2 agents after append, got %d", len(td.Agents))
+	}
+	appended := td.Agents[1]
+	if appended.Name != "brand-new" {
+		t.Errorf("expected appended agent 'brand-new', got %q", appended.Name)
+	}
+	if appended.ID != "new1" {
+		t.Errorf("expected appended ID 'new1', got %q", appended.ID)
+	}
+}
+
+// TestMergeSubagents_SameNameMatchesFirstUnmatched verifies that when multiple
+// transcript agents share a Name, each filesystem agent matches a distinct one.
+func TestMergeSubagents_SameNameMatchesFirstUnmatched(t *testing.T) {
+	td := &model.TranscriptData{
+		Agents: []model.AgentEntry{
+			{Name: "rb-worker", Status: "completed", Model: "haiku", DurationMs: 1},
+			{Name: "rb-worker", Status: "completed", Model: "sonnet", DurationMs: 2},
+		},
+	}
+	fsAgents := []model.AgentEntry{
+		{ID: "fs-a", Name: "rb-worker", Status: "completed", DurationMs: 1000},
+		{ID: "fs-b", Name: "rb-worker", Status: "completed", DurationMs: 2000},
+	}
+
+	mergeSubagents(td, fsAgents)
+
+	// Both transcript agents updated; no duplicates appended.
+	if len(td.Agents) != 2 {
+		t.Fatalf("expected 2 agents, got %d", len(td.Agents))
+	}
+	// First agent matched fs-a.
+	if td.Agents[0].ID != "fs-a" {
+		t.Errorf("agent[0]: expected ID 'fs-a', got %q", td.Agents[0].ID)
+	}
+	if td.Agents[0].DurationMs != 1000 {
+		t.Errorf("agent[0]: expected DurationMs 1000, got %d", td.Agents[0].DurationMs)
+	}
+	if td.Agents[0].Model != "haiku" {
+		t.Errorf("agent[0]: expected Model 'haiku' preserved, got %q", td.Agents[0].Model)
+	}
+	// Second agent matched fs-b.
+	if td.Agents[1].ID != "fs-b" {
+		t.Errorf("agent[1]: expected ID 'fs-b', got %q", td.Agents[1].ID)
+	}
+	if td.Agents[1].DurationMs != 2000 {
+		t.Errorf("agent[1]: expected DurationMs 2000, got %d", td.Agents[1].DurationMs)
+	}
+	if td.Agents[1].Model != "sonnet" {
+		t.Errorf("agent[1]: expected Model 'sonnet' preserved, got %q", td.Agents[1].Model)
 	}
 }
 
@@ -336,6 +419,145 @@ func TestMergeSubagents_Empty(t *testing.T) {
 
 	if len(td.Agents) != 1 {
 		t.Fatalf("expected 1 agent unchanged, got %d", len(td.Agents))
+	}
+}
+
+// writeMetaJSON creates a .meta.json sidecar file in dir with the given fields.
+func writeMetaJSON(t *testing.T, dir, agentID, agentType, description string) {
+	t.Helper()
+	meta := map[string]interface{}{}
+	if agentType != "" {
+		meta["agentType"] = agentType
+	}
+	if description != "" {
+		meta["description"] = description
+	}
+	data, err := json.Marshal(meta)
+	if err != nil {
+		t.Fatalf("marshal meta: %v", err)
+	}
+	path := filepath.Join(dir, "agent-"+agentID+".meta.json")
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write meta: %v", err)
+	}
+}
+
+// TestDiscoverSubagents_PrefersDescription verifies that when a .meta.json has
+// a description field, the agent Name is set to that description.
+func TestDiscoverSubagents_PrefersDescription(t *testing.T) {
+	transcriptPath, subagentsDir := setupSubagentsDir(t)
+
+	agentID := "abc1234567"
+	writeSubagentFile(t, subagentsDir, agentID, "do work")
+	writeMetaJSON(t, subagentsDir, agentID, "rb-worker", "Add regression tests")
+
+	agents := discoverSubagents(transcriptPath)
+	if len(agents) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(agents))
+	}
+	if agents[0].Name != "Add regression tests" {
+		t.Errorf("expected Name 'Add regression tests' (from description), got %q", agents[0].Name)
+	}
+}
+
+// TestDiscoverSubagents_FallsBackToAgentType verifies that when a .meta.json
+// has agentType but no description, the agent Name is set to agentType.
+func TestDiscoverSubagents_FallsBackToAgentType(t *testing.T) {
+	transcriptPath, subagentsDir := setupSubagentsDir(t)
+
+	agentID := "def9876543"
+	writeSubagentFile(t, subagentsDir, agentID, "explore task")
+	writeMetaJSON(t, subagentsDir, agentID, "Explore", "")
+
+	agents := discoverSubagents(transcriptPath)
+	if len(agents) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(agents))
+	}
+	if agents[0].Name != "Explore" {
+		t.Errorf("expected Name 'Explore' (from agentType), got %q", agents[0].Name)
+	}
+}
+
+// TestDiscoverSubagents_FallsBackToUUID verifies that when the .meta.json is
+// missing entirely, the agent Name falls back to the raw UUID.
+func TestDiscoverSubagents_FallsBackToUUID(t *testing.T) {
+	transcriptPath, subagentsDir := setupSubagentsDir(t)
+
+	agentID := "deadbeef01"
+	writeSubagentFile(t, subagentsDir, agentID, "some task")
+	// No .meta.json written.
+
+	agents := discoverSubagents(transcriptPath)
+	if len(agents) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(agents))
+	}
+	if agents[0].Name != agentID {
+		t.Errorf("expected Name %q (UUID fallback), got %q", agentID, agents[0].Name)
+	}
+}
+
+// TestReadAgentMeta_BothFields verifies that readAgentMeta returns both fields
+// when both are present in the file.
+func TestReadAgentMeta_BothFields(t *testing.T) {
+	dir := t.TempDir()
+	writeMetaJSON(t, dir, "test-id", "rb-worker", "Build the feature")
+	path := filepath.Join(dir, "agent-test-id.meta.json")
+
+	meta := readAgentMeta(path)
+	if meta.agentType != "rb-worker" {
+		t.Errorf("expected agentType 'rb-worker', got %q", meta.agentType)
+	}
+	if meta.description != "Build the feature" {
+		t.Errorf("expected description 'Build the feature', got %q", meta.description)
+	}
+}
+
+// TestReadAgentMeta_MissingFile verifies that readAgentMeta returns zero value
+// when the file does not exist.
+func TestReadAgentMeta_MissingFile(t *testing.T) {
+	meta := readAgentMeta("/nonexistent/agent-xyz.meta.json")
+	if meta.agentType != "" || meta.description != "" {
+		t.Errorf("expected zero agentMeta for missing file, got %+v", meta)
+	}
+}
+
+// TestReadAgentMeta_AgentTypeOnly verifies description is empty when absent.
+func TestReadAgentMeta_AgentTypeOnly(t *testing.T) {
+	dir := t.TempDir()
+	writeMetaJSON(t, dir, "test-id", "Plan", "")
+	path := filepath.Join(dir, "agent-test-id.meta.json")
+
+	meta := readAgentMeta(path)
+	if meta.agentType != "Plan" {
+		t.Errorf("expected agentType 'Plan', got %q", meta.agentType)
+	}
+	if meta.description != "" {
+		t.Errorf("expected empty description, got %q", meta.description)
+	}
+}
+
+func TestParseFirstEntry_IsWarmup_True(t *testing.T) {
+	dir := t.TempDir()
+	path := writeSubagentFile(t, dir, "warmup", "Warmup")
+	result := parseFirstEntry(path)
+	if !result.isWarmup {
+		t.Error("expected isWarmup=true for 'Warmup' content")
+	}
+}
+
+func TestParseFirstEntry_IsWarmup_False(t *testing.T) {
+	dir := t.TempDir()
+	path := writeSubagentFile(t, dir, "real", "Implement feature X")
+	result := parseFirstEntry(path)
+	if result.isWarmup {
+		t.Error("expected isWarmup=false for non-warmup content")
+	}
+}
+
+func TestParseFirstEntry_IsWarmup_MissingFile(t *testing.T) {
+	result := parseFirstEntry("/nonexistent/path.jsonl")
+	if result.isWarmup {
+		t.Error("expected isWarmup=false for missing file")
 	}
 }
 
