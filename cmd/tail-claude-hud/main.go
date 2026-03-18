@@ -3,14 +3,13 @@ package main
 import (
 	"flag"
 	"fmt"
+	"image/color"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
-
-	"image/color"
 
 	"charm.land/lipgloss/v2"
 	"github.com/lucasb-eyer/go-colorful"
@@ -342,10 +341,10 @@ func detectLightBackground() bool {
 	}
 
 	// Cache miss or stale — detect via BackgroundColor which exposes errors.
-	// On failure, preserve the cached value instead of defaulting to dark.
+	// On failure, preserve the cached value. No cache + failed query = dark.
 	light, ok := queryLightBackground()
 	if !ok {
-		return cachedLight || !hasCached
+		return hasCached && cachedLight
 	}
 
 	mode := "dark"
@@ -357,21 +356,20 @@ func detectLightBackground() bool {
 	return light
 }
 
-// queryLightBackground queries the terminal background via /dev/tty.
-// Returns (isLight, ok). When ok is false the query failed and the caller
-// should fall back to the cached value rather than assuming dark.
+// queryLightBackground queries the terminal background via /dev/tty,
+// falling back to stderr. Returns (isLight, ok). When ok is false the
+// query failed and the caller should preserve the cached value.
 func queryLightBackground() (light bool, ok bool) {
-	// Try /dev/tty first — works even when all stdio fds are pipes.
-	if tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0); err == nil {
+	var bg color.Color
+	var err error
+
+	if tty, ttyErr := os.OpenFile("/dev/tty", os.O_RDWR, 0); ttyErr == nil {
 		defer tty.Close()
-		bg, err := lipgloss.BackgroundColor(tty, tty)
-		if err != nil || bg == nil {
-			return false, false
-		}
-		return isLightColor(bg), true
+		bg, err = lipgloss.BackgroundColor(tty, tty)
+	} else {
+		bg, err = lipgloss.BackgroundColor(os.Stdin, os.Stderr)
 	}
-	// Fall back to stderr.
-	bg, err := lipgloss.BackgroundColor(os.Stdin, os.Stderr)
+
 	if err != nil || bg == nil {
 		return false, false
 	}

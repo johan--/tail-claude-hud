@@ -238,11 +238,11 @@ func Render(w io.Writer, ctx *model.RenderContext, cfg *config.Config) {
 		default: // "plain" or any unknown value
 			// Plain mode: apply widget styles and join with separator.
 			var parts []string
-			for i, r := range results {
+			for _, r := range results {
 				if r.IsEmpty() {
 					continue
 				}
-				parts = append(parts, applyWidgetStyle(r, names[i], cfg))
+				parts = append(parts, applyWidgetStyle(r))
 			}
 			if len(parts) == 0 {
 				continue
@@ -278,7 +278,7 @@ func Render(w io.Writer, ctx *model.RenderContext, cfg *config.Config) {
 // Only explicit widget-level BgColor (from WidgetResult) is honored. Theme fg
 // is applied when the widget provides a structured FgColor; pre-styled text
 // (FgColor == "") passes through as-is.
-func applyWidgetStyle(r widget.WidgetResult, widgetName string, cfg *config.Config) string {
+func applyWidgetStyle(r widget.WidgetResult) string {
 	// Only use bg when the widget explicitly requests it (not from theme).
 	bgColor := r.BgColor
 
