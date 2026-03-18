@@ -5,12 +5,8 @@ import "github.com/kylesnowschwartz/tail-claude-hud/internal/config"
 // builtins is the registry of named built-in presets.
 var builtins = map[string]Preset{
 	"default": {
-		Name: "default",
-		Lines: []config.Line{
-			{Widgets: []string{"model", "context", "project", "todos", "duration"}},
-			{Widgets: []string{"tools"}},
-			{Widgets: []string{"agents"}},
-		},
+		Name:           "default",
+		Lines:          config.DefaultLines(),
 		Separator:      " | ",
 		Icons:          "nerdfont",
 		Mode:           "plain",
@@ -33,8 +29,8 @@ var builtins = map[string]Preset{
 		Lines: []config.Line{
 			{Widgets: []string{"model", "context", "project", "cost", "duration"}},
 			{Widgets: []string{"lines", "tokens", "speed", "messages"}},
-			{Widgets: []string{"agents"}},
 			{Widgets: []string{"tools"}},
+			{Widgets: []string{"agents"}},
 		},
 		Separator:      " | ",
 		Icons:          "nerdfont",

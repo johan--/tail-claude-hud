@@ -87,15 +87,23 @@ type Config struct {
 	ResolvedTheme theme.Theme `toml:"-"`
 }
 
-// defaults returns a Config pre-populated with all default values.
-func defaults() *Config {
-	cfg := &Config{}
-
-	cfg.Lines = []Line{
+// DefaultLines returns the canonical default widget layout. It is defined
+// here as the single source of truth and referenced by the "default" preset
+// in the preset package. Returns a fresh slice each call so callers (including
+// TOML decode) cannot mutate the canonical definition.
+func DefaultLines() []Line {
+	return []Line{
 		{Widgets: []string{"model", "context", "project", "todos", "duration"}},
 		{Widgets: []string{"agents"}},
 		{Widgets: []string{"tools"}},
 	}
+}
+
+// defaults returns a Config pre-populated with all default values.
+func defaults() *Config {
+	cfg := &Config{}
+
+	cfg.Lines = DefaultLines()
 
 	cfg.Model.ShowContextSize = true
 

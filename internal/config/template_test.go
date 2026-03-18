@@ -73,10 +73,7 @@ func TestInitErrorsWhenFileExists(t *testing.T) {
 		t.Fatalf("setup write: %v", err)
 	}
 
-	// Temporarily override UserHomeDir by pointing HOME to tmpHome.
-	orig := os.Getenv("HOME")
 	t.Setenv("HOME", tmpHome)
-	defer os.Setenv("HOME", orig)
 
 	err := Init()
 	if err == nil {
@@ -90,10 +87,7 @@ func TestInitErrorsWhenFileExists(t *testing.T) {
 // TestInitWritesFile verifies Init creates the config file when it does not exist.
 func TestInitWritesFile(t *testing.T) {
 	tmpHome := t.TempDir()
-
-	orig := os.Getenv("HOME")
 	t.Setenv("HOME", tmpHome)
-	defer os.Setenv("HOME", orig)
 
 	if err := Init(); err != nil {
 		t.Fatalf("Init() returned unexpected error: %v", err)

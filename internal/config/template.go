@@ -16,8 +16,8 @@ const DefaultTemplate = `# tail-claude-hud configuration
 #
 # Default layout (C+D hybrid):
 #   Line 1 (identity + health): model, context, project, todos, duration
-#   Line 2 (per-agent activity): agents  — ephemeral, hides when empty
-#   Line 3 (tools):             tools   — ephemeral, hides when empty
+#   Line 2 (tools):              tools   — ephemeral, hides when empty
+#   Line 3 (per-agent activity): agents  — ephemeral, hides when empty
 #
 # All available widgets:
 #   model     — active Claude model name
@@ -38,10 +38,10 @@ const DefaultTemplate = `# tail-claude-hud configuration
 widgets = ["model", "context", "project", "todos", "duration"]
 
 [[line]]
-widgets = ["agents"]
+widgets = ["tools"]
 
 [[line]]
-widgets = ["tools"]
+widgets = ["agents"]
 
 # Model widget — shows the active Claude model name.
 [model]

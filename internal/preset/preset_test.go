@@ -1,6 +1,7 @@
 package preset_test
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
@@ -62,24 +63,22 @@ func TestAllBuiltinsLoadSuccessfully(t *testing.T) {
 	}
 }
 
+// TestDefaultPresetMatchesConfigDefaults verifies the default preset
+// references config.DefaultLines — the single source of truth for layout.
 func TestDefaultPresetMatchesConfigDefaults(t *testing.T) {
 	p, ok := preset.Load("default")
 	if !ok {
 		t.Fatal("Load(\"default\") returned false")
 	}
 
-	// Spec: 3 lines matching config.defaults() layout
-	if len(p.Lines) != 3 {
-		t.Fatalf("default preset has %d lines, want 3", len(p.Lines))
+	defaults := config.DefaultLines()
+	if len(p.Lines) != len(defaults) {
+		t.Fatalf("default preset has %d lines, want %d (config.DefaultLines)", len(p.Lines), len(defaults))
 	}
 
-	wantLine0 := []string{"model", "context", "project", "todos", "duration"}
-	wantLine1 := []string{"agents"}
-	wantLine2 := []string{"tools"}
-
-	assertWidgets(t, "line 0", p.Lines[0].Widgets, wantLine0)
-	assertWidgets(t, "line 1", p.Lines[1].Widgets, wantLine1)
-	assertWidgets(t, "line 2", p.Lines[2].Widgets, wantLine2)
+	for i, want := range defaults {
+		assertWidgets(t, fmt.Sprintf("line %d", i), p.Lines[i].Widgets, want.Widgets)
+	}
 }
 
 // TestApplyPresetOverwritesLayout verifies spec 1: ApplyPreset replaces Lines.
