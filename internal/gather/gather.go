@@ -236,29 +236,35 @@ func sessionStart(td *model.TranscriptData, path string) string {
 	return t.Format("2006-01-02T15:04:05Z07:00")
 }
 
-// terminalWidth returns the current terminal width by querying the TTY via
-// ioctl first, falling back to the COLUMNS environment variable. Returns 0
-// when neither source provides a positive value, which signals the render
-// layer to skip truncation.
+// terminalWidth returns the current terminal width. Detection order:
+//  1. /dev/tty — the controlling terminal, works even when all fds are pipes
+//  2. stdin, stderr, stdout fds — in case /dev/tty is unavailable
+//  3. COLUMNS env var — last resort, may be stale after resize
 //
-// Querying the TTY directly (rather than relying on COLUMNS) ensures we get
-// the actual width when the terminal is split or resized, because shells only
-// update COLUMNS on receipt of a SIGWINCH signal — Claude Code may not
-// propagate that signal to the subprocess before invoking the HUD.
+// Returns 0 when no source provides a positive value.
 func terminalWidth() int {
-	// Try each fd in turn. In Claude Code's statusline mode stdin is a pipe
-	// (JSON input), so GetSize on stdin always fails. Stderr is typically still
-	// connected to the terminal even when stdin/stdout are pipes, making it the
-	// most reliable fallback for reading the actual terminal dimensions.
+	// Open /dev/tty directly. In Claude Code's statusline mode all three
+	// standard fds are pipes (stdin=JSON, stdout=captured, stderr=captured),
+	// so ioctl on any of them fails. /dev/tty bypasses redirections and
+	// gives us the controlling terminal's actual dimensions.
+	if tty, err := os.Open("/dev/tty"); err == nil {
+		if w, _, err := term.GetSize(tty.Fd()); err == nil && w > 0 {
+			tty.Close()
+			return w
+		}
+		tty.Close()
+	}
+
+	// Fallback: try each standard fd in case /dev/tty is unavailable
+	// (e.g. containerized environments without a controlling terminal).
 	for _, fd := range []uintptr{os.Stdin.Fd(), os.Stderr.Fd(), os.Stdout.Fd()} {
 		if w, _, err := term.GetSize(fd); err == nil && w > 0 {
 			return w
 		}
 	}
 
-	// Last resort: COLUMNS env var. Shells update this on SIGWINCH, but Claude
-	// Code may not propagate that signal before invoking the HUD, so this can
-	// lag behind the actual terminal width after a resize.
+	// Last resort: COLUMNS env var. Shells update this on SIGWINCH, but
+	// Claude Code may not propagate that signal before invoking the HUD.
 	s := os.Getenv("COLUMNS")
 	if s == "" {
 		return 0
