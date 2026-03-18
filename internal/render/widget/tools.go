@@ -141,6 +141,12 @@ func renderToolEntry(icons Icons, t model.ToolEntry) string {
 	catIcon := CategoryIcon(icons, t.Category)
 
 	if !t.Completed {
+		if t.Category == "Thinking" {
+			// Running thinking: yellow icon + dim name, matching the completed
+			// tool pattern (bright icon, dim text) since "Thinking" carries no
+			// additional information beyond the icon itself.
+			return fmt.Sprintf("%s%s", yellowStyle.Render(catIcon), dimStyle.Render(t.Name))
+		}
 		// Running: yellow icon+name as a single glyph.
 		return yellowStyle.Bold(true).Render(catIcon + t.Name)
 	}

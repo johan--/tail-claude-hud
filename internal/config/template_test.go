@@ -12,7 +12,7 @@ import (
 // TestDefaultTemplateIsValidTOML verifies that the template can be decoded
 // without error and that LoadHud can parse it successfully.
 func TestDefaultTemplateIsValidTOML(t *testing.T) {
-	var v interface{}
+	var v any
 	if _, err := toml.Decode(DefaultTemplate, &v); err != nil {
 		t.Fatalf("DefaultTemplate is not valid TOML: %v", err)
 	}
