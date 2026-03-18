@@ -236,35 +236,21 @@ func sessionStart(td *model.TranscriptData, path string) string {
 	return t.Format("2006-01-02T15:04:05Z07:00")
 }
 
-// terminalWidth returns the current terminal width. Detection order:
-//  1. /dev/tty — the controlling terminal, works even when all fds are pipes
-//  2. stdin, stderr, stdout fds — in case /dev/tty is unavailable
-//  3. COLUMNS env var — last resort, may be stale after resize
+// terminalWidth returns the current terminal width. Tries each standard
+// fd via ioctl, then falls back to the COLUMNS env var. Returns 0 when
+// no source provides a positive value.
 //
-// Returns 0 when no source provides a positive value.
+// In Claude Code's statusline mode all three fds are pipes, so ioctl
+// fails on all of them. The render stage applies a conservative fallback
+// (defaultTerminalWidth) when this returns 0.
 func terminalWidth() int {
-	// Open /dev/tty directly. In Claude Code's statusline mode all three
-	// standard fds are pipes (stdin=JSON, stdout=captured, stderr=captured),
-	// so ioctl on any of them fails. /dev/tty bypasses redirections and
-	// gives us the controlling terminal's actual dimensions.
-	if tty, err := os.Open("/dev/tty"); err == nil {
-		if w, _, err := term.GetSize(tty.Fd()); err == nil && w > 0 {
-			tty.Close()
-			return w
-		}
-		tty.Close()
-	}
-
-	// Fallback: try each standard fd in case /dev/tty is unavailable
-	// (e.g. containerized environments without a controlling terminal).
 	for _, fd := range []uintptr{os.Stdin.Fd(), os.Stderr.Fd(), os.Stdout.Fd()} {
 		if w, _, err := term.GetSize(fd); err == nil && w > 0 {
 			return w
 		}
 	}
 
-	// Last resort: COLUMNS env var. Shells update this on SIGWINCH, but
-	// Claude Code may not propagate that signal before invoking the HUD.
+	// Last resort: COLUMNS env var.
 	s := os.Getenv("COLUMNS")
 	if s == "" {
 		return 0
