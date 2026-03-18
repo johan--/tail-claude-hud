@@ -450,7 +450,7 @@ func TestStateManager_SnapshotPersistedAndRestored(t *testing.T) {
 	}
 
 	// Simulate an extraction snapshot.
-	snapData := json.RawMessage(`{"tools":[{"name":"Read","target":"main.go","category":"file","completed":true,"has_error":false,"duration_ms":42}],"agents":[],"todos":[],"session_name":"test-session","thinking_active":false,"thinking_count":0}`)
+	snapData := json.RawMessage(`{"tools":[{"name":"Read","target":"main.go","category":"Read","completed":true,"has_error":false,"duration_ms":42}],"agents":[],"todos":[],"session_name":"test-session","thinking_active":false,"thinking_count":0}`)
 	sm1.SetSnapshot(snapData)
 
 	if err := sm1.SaveState(transcriptPath); err != nil {

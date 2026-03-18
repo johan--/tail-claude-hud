@@ -61,7 +61,7 @@ func Agents(ctx *model.RenderContext, cfg *config.Config) WidgetResult {
 // indicator or check mark, and elapsed/duration time.
 func formatAgentEntry(a model.AgentEntry, icons Icons) string {
 	style := AgentColorStyle(a.ColorIndex)
-	icon := icons.Agent
+	icon := icons.Task
 	modelSuffix := modelFamilySuffix(a.Model)
 
 	// Prefer the description ("Structural completeness review") over the

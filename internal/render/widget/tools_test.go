@@ -62,7 +62,7 @@ func containsInOrder(output string, want []string) bool {
 // rather than the misleading "0.0s".
 func TestFormatDuration_RenderedInCompletedTool(t *testing.T) {
 	tools := []model.ToolEntry{
-		{Name: "Grep", Completed: true, DurationMs: 50, Category: "search"},
+		{Name: "Grep", Completed: true, DurationMs: 50, Category: "Grep"},
 	}
 	ctx := toolsCtx(tools)
 	cfg := defaultCfg()
@@ -88,14 +88,14 @@ func TestFormatDuration_RenderedInCompletedTool(t *testing.T) {
 func TestTools_NewestFirstChronological(t *testing.T) {
 	tools := []model.ToolEntry{
 		// completed (oldest first)
-		{Name: "C1", Completed: true, DurationMs: 100, Category: "internal"},
-		{Name: "C2", Completed: true, DurationMs: 100, Category: "internal"},
-		{Name: "C3", Completed: true, DurationMs: 100, Category: "internal"},
-		{Name: "C4", Completed: true, DurationMs: 100, Category: "internal"},
+		{Name: "C1", Completed: true, DurationMs: 100, Category: "Other"},
+		{Name: "C2", Completed: true, DurationMs: 100, Category: "Other"},
+		{Name: "C3", Completed: true, DurationMs: 100, Category: "Other"},
+		{Name: "C4", Completed: true, DurationMs: 100, Category: "Other"},
 		// running (most recently started)
-		{Name: "R1", Category: "internal"},
-		{Name: "R2", Category: "internal"},
-		{Name: "R3", Category: "internal"},
+		{Name: "R1", Category: "Other"},
+		{Name: "R2", Category: "Other"},
+		{Name: "R3", Category: "Other"},
 	}
 	ctx := toolsCtx(tools)
 	cfg := defaultCfg()
@@ -144,12 +144,12 @@ func TestTools_NewestFirstChronological(t *testing.T) {
 // newest-first, then caps at 5.  The oldest (C1) must not appear.
 func TestTools_SixCompleted_OldestDropped(t *testing.T) {
 	tools := []model.ToolEntry{
-		{Name: "C1", Completed: true, DurationMs: 100, Category: "internal"}, // oldest — should be dropped
-		{Name: "C2", Completed: true, DurationMs: 200, Category: "internal"},
-		{Name: "C3", Completed: true, DurationMs: 300, Category: "internal"},
-		{Name: "C4", Completed: true, DurationMs: 400, Category: "internal"},
-		{Name: "C5", Completed: true, DurationMs: 500, Category: "internal"},
-		{Name: "C6", Completed: true, DurationMs: 600, Category: "internal"}, // newest — should appear first
+		{Name: "C1", Completed: true, DurationMs: 100, Category: "Other"}, // oldest — should be dropped
+		{Name: "C2", Completed: true, DurationMs: 200, Category: "Other"},
+		{Name: "C3", Completed: true, DurationMs: 300, Category: "Other"},
+		{Name: "C4", Completed: true, DurationMs: 400, Category: "Other"},
+		{Name: "C5", Completed: true, DurationMs: 500, Category: "Other"},
+		{Name: "C6", Completed: true, DurationMs: 600, Category: "Other"}, // newest — should appear first
 	}
 	ctx := toolsCtx(tools)
 	cfg := defaultCfg()
@@ -188,9 +188,9 @@ func TestTools_OutOfOrderCompletion_DisplayOrderCorrect(t *testing.T) {
 	// B was started second (index 1) and has already completed.
 	// C was started third (index 2) and has already completed.
 	tools := []model.ToolEntry{
-		{Name: "ToolA", Category: "shell"},                                     // still running, oldest
-		{Name: "ToolB", Completed: true, DurationMs: 500, Category: "file"},    // completed, middle
-		{Name: "ToolC", Completed: true, DurationMs: 1000, Category: "search"}, // completed, newest
+		{Name: "ToolA", Category: "Bash"},                                    // still running, oldest
+		{Name: "ToolB", Completed: true, DurationMs: 500, Category: "Read"},  // completed, middle
+		{Name: "ToolC", Completed: true, DurationMs: 1000, Category: "Grep"}, // completed, newest
 	}
 	ctx := toolsCtx(tools)
 	cfg := defaultCfg()
@@ -219,9 +219,9 @@ func TestTools_OutOfOrderCompletion_DisplayOrderCorrect(t *testing.T) {
 // Thinking must NOT appear before Grep.
 func TestTools_ThinkingChronologicalOrder(t *testing.T) {
 	tools := []model.ToolEntry{
-		{Name: "Read", Completed: true, DurationMs: 300, Category: "file"},   // oldest
-		{Name: "Thinking", Completed: false, Category: "thinking"},           // middle, still running
-		{Name: "Grep", Completed: true, DurationMs: 150, Category: "search"}, // newest
+		{Name: "Read", Completed: true, DurationMs: 300, Category: "Read"}, // oldest
+		{Name: "Thinking", Completed: false, Category: "Thinking"},         // middle, still running
+		{Name: "Grep", Completed: true, DurationMs: 150, Category: "Grep"}, // newest
 	}
 	ctx := toolsCtx(tools)
 	cfg := defaultCfg()
@@ -250,9 +250,9 @@ func TestTools_ThinkingChronologicalOrder(t *testing.T) {
 // present, the output is strictly newest-first (highest insertion index first).
 func TestTools_NewestToolsAppearFirst(t *testing.T) {
 	tools := []model.ToolEntry{
-		{Name: "T1", Completed: true, DurationMs: 100, Category: "internal"}, // oldest
-		{Name: "T2", Completed: true, DurationMs: 200, Category: "internal"},
-		{Name: "T3", Completed: true, DurationMs: 300, Category: "internal"}, // newest
+		{Name: "T1", Completed: true, DurationMs: 100, Category: "Other"}, // oldest
+		{Name: "T2", Completed: true, DurationMs: 200, Category: "Other"},
+		{Name: "T3", Completed: true, DurationMs: 300, Category: "Other"}, // newest
 	}
 	ctx := toolsCtx(tools)
 	cfg := defaultCfg()
@@ -269,13 +269,13 @@ func TestTools_NewestToolsAppearFirst(t *testing.T) {
 // entries exist, only the newest maxVisibleTools are shown and the oldest are dropped.
 func TestTools_MaxVisibleToolsCap(t *testing.T) {
 	tools := []model.ToolEntry{
-		{Name: "Old1", Completed: true, DurationMs: 100, Category: "internal"}, // oldest, should be dropped
-		{Name: "Old2", Completed: true, DurationMs: 100, Category: "internal"}, // should be dropped
-		{Name: "N3", Completed: true, DurationMs: 100, Category: "internal"},
-		{Name: "N4", Completed: true, DurationMs: 100, Category: "internal"},
-		{Name: "N5", Completed: true, DurationMs: 100, Category: "internal"},
-		{Name: "N6", Completed: true, DurationMs: 100, Category: "internal"},
-		{Name: "N7", Completed: true, DurationMs: 100, Category: "internal"}, // newest
+		{Name: "Old1", Completed: true, DurationMs: 100, Category: "Other"}, // oldest, should be dropped
+		{Name: "Old2", Completed: true, DurationMs: 100, Category: "Other"}, // should be dropped
+		{Name: "N3", Completed: true, DurationMs: 100, Category: "Other"},
+		{Name: "N4", Completed: true, DurationMs: 100, Category: "Other"},
+		{Name: "N5", Completed: true, DurationMs: 100, Category: "Other"},
+		{Name: "N6", Completed: true, DurationMs: 100, Category: "Other"},
+		{Name: "N7", Completed: true, DurationMs: 100, Category: "Other"}, // newest
 	}
 	ctx := toolsCtx(tools)
 	cfg := defaultCfg()
@@ -365,7 +365,7 @@ func TestTools_MaxToolsBufferFillsAndPrunes(t *testing.T) {
 func TestTools_DividerHighlight(t *testing.T) {
 	t.Run("single tool has no separator", func(t *testing.T) {
 		tools := []model.ToolEntry{
-			{Name: "Solo", Completed: true, DurationMs: 100, Category: "internal"},
+			{Name: "Solo", Completed: true, DurationMs: 100, Category: "Other"},
 		}
 		ctx := toolsCtx(tools)
 		cfg := defaultCfg()
@@ -379,8 +379,8 @@ func TestTools_DividerHighlight(t *testing.T) {
 
 	t.Run("two tools: highlight cycles between sole separator position", func(t *testing.T) {
 		tools := []model.ToolEntry{
-			{Name: "A", Completed: true, DurationMs: 100, Category: "internal"},
-			{Name: "B", Completed: true, DurationMs: 200, Category: "internal"},
+			{Name: "A", Completed: true, DurationMs: 100, Category: "Other"},
+			{Name: "B", Completed: true, DurationMs: 200, Category: "Other"},
 		}
 		cfg := defaultCfg()
 
@@ -395,9 +395,9 @@ func TestTools_DividerHighlight(t *testing.T) {
 
 	t.Run("three tools: highlight position wraps", func(t *testing.T) {
 		tools := []model.ToolEntry{
-			{Name: "A", Completed: true, DurationMs: 100, Category: "internal"},
-			{Name: "B", Completed: true, DurationMs: 200, Category: "internal"},
-			{Name: "C", Completed: true, DurationMs: 300, Category: "internal"},
+			{Name: "A", Completed: true, DurationMs: 100, Category: "Other"},
+			{Name: "B", Completed: true, DurationMs: 200, Category: "Other"},
+			{Name: "C", Completed: true, DurationMs: 300, Category: "Other"},
 		}
 		cfg := defaultCfg()
 
@@ -434,10 +434,10 @@ func TestTools_DividerHighlight(t *testing.T) {
 		// 4 tools = 3 separator positions. Offset 3→6 should cycle through
 		// positions 0, 1, 2, 0, 1, 2...
 		tools := []model.ToolEntry{
-			{Name: "T1", Completed: true, DurationMs: 100, Category: "internal"},
-			{Name: "T2", Completed: true, DurationMs: 200, Category: "internal"},
-			{Name: "T3", Completed: true, DurationMs: 300, Category: "internal"},
-			{Name: "T4", Completed: true, DurationMs: 400, Category: "internal"},
+			{Name: "T1", Completed: true, DurationMs: 100, Category: "Other"},
+			{Name: "T2", Completed: true, DurationMs: 200, Category: "Other"},
+			{Name: "T3", Completed: true, DurationMs: 300, Category: "Other"},
+			{Name: "T4", Completed: true, DurationMs: 400, Category: "Other"},
 		}
 		cfg := defaultCfg()
 

@@ -531,7 +531,7 @@ func TestToolsWidget_EmptyToolsReturnsEmpty(t *testing.T) {
 // Spec 8: running tool renders with category icon + name + elapsed.
 func TestToolsWidget_RunningToolShowsCategoryIconAndName(t *testing.T) {
 	ctx := &model.RenderContext{Transcript: &model.TranscriptData{
-		Tools: []model.ToolEntry{{Name: "Read", Category: "file"}},
+		Tools: []model.ToolEntry{{Name: "Read", Category: "Read"}},
 	}}
 	cfg := defaultCfg()
 	cfg.Style.Icons = "ascii"
@@ -548,7 +548,7 @@ func TestToolsWidget_RunningToolShowsCategoryIconAndName(t *testing.T) {
 
 func TestToolsWidget_RunningToolShowsYellowIconNoSpinner(t *testing.T) {
 	ctx := &model.RenderContext{Transcript: &model.TranscriptData{
-		Tools: []model.ToolEntry{{Name: "Bash", Category: "shell"}},
+		Tools: []model.ToolEntry{{Name: "Bash", Category: "Bash"}},
 	}}
 	cfg := defaultCfg()
 	cfg.Style.Icons = "ascii"
@@ -570,7 +570,7 @@ func TestToolsWidget_RunningToolShowsYellowIconNoSpinner(t *testing.T) {
 // Spec 9: completed tool renders with dim category icon + name + duration.
 func TestToolsWidget_CompletedToolShowsDimCategoryIconAndDuration(t *testing.T) {
 	ctx := &model.RenderContext{Transcript: &model.TranscriptData{
-		Tools: []model.ToolEntry{{Name: "Write", Completed: true, Category: "file", DurationMs: 300}},
+		Tools: []model.ToolEntry{{Name: "Write", Completed: true, Category: "Write", DurationMs: 300}},
 	}}
 	cfg := defaultCfg()
 	cfg.Style.Icons = "ascii"
@@ -592,7 +592,7 @@ func TestToolsWidget_CompletedToolShowsDimCategoryIconAndDuration(t *testing.T) 
 // Spec 10: error tool renders with red error icon + name + "err".
 func TestToolsWidget_ErrorToolShowsRedCategoryIcon(t *testing.T) {
 	ctx := &model.RenderContext{Transcript: &model.TranscriptData{
-		Tools: []model.ToolEntry{{Name: "Bash", Completed: true, Category: "shell", DurationMs: 500, HasError: true}},
+		Tools: []model.ToolEntry{{Name: "Bash", Completed: true, Category: "Bash", DurationMs: 500, HasError: true}},
 	}}
 	cfg := defaultCfg()
 	cfg.Style.Icons = "ascii"
@@ -600,8 +600,8 @@ func TestToolsWidget_ErrorToolShowsRedCategoryIcon(t *testing.T) {
 	got := Tools(ctx, cfg).Text
 	icons := IconsFor("ascii")
 	// Error uses category icon (not error icon) in red.
-	if !strings.Contains(got, icons.Shell) {
-		t.Errorf("Tools error: expected shell icon %q, got %q", icons.Shell, got)
+	if !strings.Contains(got, icons.Bash) {
+		t.Errorf("Tools error: expected Bash icon %q, got %q", icons.Bash, got)
 	}
 	if !strings.Contains(got, "Bash") {
 		t.Errorf("Tools error: expected tool name 'Bash', got %q", got)
@@ -725,9 +725,9 @@ func TestAgentsWidget_RunningAgentUsesAgentIcon(t *testing.T) {
 
 	got := Agents(ctx, cfg).Text
 	icons := IconsFor("ascii")
-	// The agent icon should be rendered (ASCII mode uses "@" for Agent).
-	if !strings.Contains(got, icons.Agent) {
-		t.Errorf("Agents running: expected agent icon %q, got %q", icons.Agent, got)
+	// The agent icon should be rendered (ASCII mode uses "@" for Task).
+	if !strings.Contains(got, icons.Task) {
+		t.Errorf("Agents running: expected agent icon %q, got %q", icons.Task, got)
 	}
 }
 
@@ -1748,12 +1748,15 @@ func TestIconsFor_NewFieldsNonEmpty(t *testing.T) {
 		fields := map[string]string{
 			"Read":     icons.Read,
 			"Edit":     icons.Edit,
-			"Shell":    icons.Shell,
-			"Search":   icons.Search,
+			"Write":    icons.Write,
+			"Bash":     icons.Bash,
+			"Grep":     icons.Grep,
+			"Glob":     icons.Glob,
 			"Web":      icons.Web,
-			"Agent":    icons.Agent,
-			"Gear":     icons.Gear,
+			"Task":     icons.Task,
+			"Skill":    icons.Skill,
 			"Thinking": icons.Thinking,
+			"Other":    icons.Other,
 			"Error":    icons.Error,
 		}
 		for name, val := range fields {
@@ -1772,12 +1775,16 @@ func TestCategoryIcon_KnownCategories(t *testing.T) {
 		category string
 		want     string
 	}{
-		{"file", icons.Read},
-		{"shell", icons.Shell},
-		{"search", icons.Search},
-		{"web", icons.Web},
-		{"agent", icons.Agent},
-		{"internal", icons.Gear},
+		{"Read", icons.Read},
+		{"Edit", icons.Edit},
+		{"Write", icons.Write},
+		{"Bash", icons.Bash},
+		{"Grep", icons.Grep},
+		{"Glob", icons.Glob},
+		{"Web", icons.Web},
+		{"Task", icons.Task},
+		{"Skill", icons.Skill},
+		{"Thinking", icons.Thinking},
 	}
 	for _, tt := range tests {
 		got := CategoryIcon(icons, tt.category)
@@ -1787,16 +1794,16 @@ func TestCategoryIcon_KnownCategories(t *testing.T) {
 	}
 }
 
-func TestCategoryIcon_UnknownFallsBackToGear(t *testing.T) {
+func TestCategoryIcon_UnknownFallsBackToOther(t *testing.T) {
 	icons := IconsFor("ascii")
 	got := CategoryIcon(icons, "unknown-category")
-	if got != icons.Gear {
-		t.Errorf("CategoryIcon(ascii, \"unknown-category\") = %q, want Gear %q", got, icons.Gear)
+	if got != icons.Other {
+		t.Errorf("CategoryIcon(ascii, \"unknown-category\") = %q, want Other %q", got, icons.Other)
 	}
 }
 
 func TestCategoryIcon_AllModesReturnNonEmpty(t *testing.T) {
-	categories := []string{"file", "shell", "search", "web", "agent", "internal", "unknown"}
+	categories := []string{"Read", "Edit", "Write", "Bash", "Grep", "Glob", "Web", "Task", "Skill", "Thinking", "unknown"}
 	modes := []string{"nerdfont", "unicode", "ascii"}
 	for _, mode := range modes {
 		icons := IconsFor(mode)

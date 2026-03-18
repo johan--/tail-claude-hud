@@ -305,7 +305,7 @@ func (es *ExtractionState) handleThinkingStart(ts time.Time) {
 	t := &internalTool{
 		id:        id,
 		name:      "Thinking",
-		category:  "thinking",
+		category:  "Thinking",
 		startTime: ts,
 	}
 	es.toolMap[id] = t
@@ -569,21 +569,31 @@ func (es *ExtractionState) resolveTaskIndex(taskID string) int {
 }
 
 // toolCategory returns the display category for a tool name.
-// Categories: file, shell, search, web, agent, internal.
+// Each tool gets its own category so the renderer can assign distinct icons.
+// Categories match the tool's primary identity: Read, Edit, Write, Bash,
+// Grep, Glob, Web, Task, Skill, Thinking, or Other for unknown tools.
 func toolCategory(name string) string {
 	switch name {
-	case "Read", "Write", "Edit":
-		return "file"
+	case "Read":
+		return "Read"
+	case "Edit":
+		return "Edit"
+	case "Write", "NotebookEdit":
+		return "Write"
 	case "Bash":
-		return "shell"
-	case "Grep", "Glob":
-		return "search"
+		return "Bash"
+	case "Grep":
+		return "Grep"
+	case "Glob":
+		return "Glob"
 	case "WebFetch", "WebSearch":
-		return "web"
+		return "Web"
 	case "Agent", "Task":
-		return "agent"
+		return "Task"
+	case "Skill":
+		return "Skill"
 	default:
-		return "internal"
+		return "Other"
 	}
 }
 

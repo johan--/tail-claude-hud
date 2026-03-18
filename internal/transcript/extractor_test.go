@@ -441,55 +441,30 @@ func TestToTranscriptData_TodosCopied(t *testing.T) {
 
 // ---- New ToolEntry fields: Category, Target, HasError, DurationMs ---------
 
-func TestToTranscriptData_Category_FileTools(t *testing.T) {
-	for _, name := range []string{"Read", "Write", "Edit"} {
+func TestToTranscriptData_Category_PerToolCategories(t *testing.T) {
+	tests := []struct {
+		toolName string
+		want     string
+	}{
+		{"Read", "Read"},
+		{"Edit", "Edit"},
+		{"Write", "Write"},
+		{"NotebookEdit", "Write"},
+		{"Bash", "Bash"},
+		{"Grep", "Grep"},
+		{"Glob", "Glob"},
+		{"WebFetch", "Web"},
+		{"WebSearch", "Web"},
+		{"Skill", "Skill"},
+		{"SomeFutureTool", "Other"},
+	}
+	for _, tt := range tests {
 		es := NewExtractionState()
-		es.ProcessEntry(makeToolUseEntry("id-1", name, map[string]interface{}{"file_path": "x.go"}))
+		es.ProcessEntry(makeToolUseEntry("id-1", tt.toolName, map[string]interface{}{}))
 		data := es.ToTranscriptData()
-		if data.Tools[0].Category != "file" {
-			t.Errorf("%s: expected category=file, got %q", name, data.Tools[0].Category)
+		if data.Tools[0].Category != tt.want {
+			t.Errorf("%s: expected category=%q, got %q", tt.toolName, tt.want, data.Tools[0].Category)
 		}
-	}
-}
-
-func TestToTranscriptData_Category_ShellTool(t *testing.T) {
-	es := NewExtractionState()
-	es.ProcessEntry(makeToolUseEntry("id-1", "Bash", map[string]interface{}{"command": "ls"}))
-	data := es.ToTranscriptData()
-	if data.Tools[0].Category != "shell" {
-		t.Errorf("expected category=shell, got %q", data.Tools[0].Category)
-	}
-}
-
-func TestToTranscriptData_Category_SearchTools(t *testing.T) {
-	for _, name := range []string{"Grep", "Glob"} {
-		es := NewExtractionState()
-		es.ProcessEntry(makeToolUseEntry("id-1", name, map[string]interface{}{"pattern": "*.go"}))
-		data := es.ToTranscriptData()
-		if data.Tools[0].Category != "search" {
-			t.Errorf("%s: expected category=search, got %q", name, data.Tools[0].Category)
-		}
-	}
-}
-
-func TestToTranscriptData_Category_WebTools(t *testing.T) {
-	for _, name := range []string{"WebFetch", "WebSearch"} {
-		es := NewExtractionState()
-		es.ProcessEntry(makeToolUseEntry("id-1", name, map[string]interface{}{}))
-		data := es.ToTranscriptData()
-		if data.Tools[0].Category != "web" {
-			t.Errorf("%s: expected category=web, got %q", name, data.Tools[0].Category)
-		}
-	}
-}
-
-func TestToTranscriptData_Category_InternalTool(t *testing.T) {
-	// Tools not in any known category fall back to "internal".
-	es := NewExtractionState()
-	es.ProcessEntry(makeToolUseEntry("id-1", "SomeFutureTool", map[string]interface{}{}))
-	data := es.ToTranscriptData()
-	if data.Tools[0].Category != "internal" {
-		t.Errorf("expected category=internal for unknown tool, got %q", data.Tools[0].Category)
 	}
 }
 
@@ -2541,7 +2516,7 @@ func TestTokenSamples_PersistedThroughSnapshot(t *testing.T) {
 // ---- Thinking as ToolEntry (specs: thinking emitted as tool entry) ----
 
 // TestThinking_EmitsToolEntry_Running verifies that a thinking-only entry adds
-// a ToolEntry with Name="Thinking", Category="thinking", Completed=false.
+// a ToolEntry with Name="Thinking", Category="Thinking", Completed=false.
 func TestThinking_EmitsToolEntry_Running(t *testing.T) {
 	es := NewExtractionState()
 	es.ProcessEntry(makeThinkingEntry())
@@ -2554,8 +2529,8 @@ func TestThinking_EmitsToolEntry_Running(t *testing.T) {
 	if tool.Name != "Thinking" {
 		t.Errorf("expected Name=Thinking, got %q", tool.Name)
 	}
-	if tool.Category != "thinking" {
-		t.Errorf("expected Category=thinking, got %q", tool.Category)
+	if tool.Category != "Thinking" {
+		t.Errorf("expected Category=Thinking, got %q", tool.Category)
 	}
 	if tool.Completed {
 		t.Error("expected Completed=false (thinking still in progress), got true")

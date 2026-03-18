@@ -61,15 +61,18 @@ type Icons struct {
 	Folder  string
 	Branch  string
 
-	// Tool category icons
+	// Per-tool category icons (one per tool category).
 	Read     string
 	Edit     string
-	Shell    string
-	Search   string
+	Write    string
+	Bash     string
+	Grep     string
+	Glob     string
 	Web      string
-	Agent    string
-	Gear     string
+	Task     string
+	Skill    string
 	Thinking string
+	Other    string // fallback for unrecognized tools
 	Error    string
 }
 
@@ -84,15 +87,18 @@ func IconsFor(mode string) Icons {
 			Clock:    "\uf017",     // nf-fa-clock_o
 			Folder:   "\uf07b",     // nf-fa-folder
 			Branch:   "\ue0a0",     // nf-pl-branch
-			Read:     "\ue28b",     // book
-			Edit:     "\uee75",     // pen
-			Shell:    "\U000F0BE0", // wrench
-			Search:   "\U000F0968", // folder-search
-			Web:      "\U000F059F", // web
-			Agent:    "\U000F167A", // robot
-			Gear:     "\uf013",     // gear
-			Thinking: "\uf0eb",     // lightbulb
-			Error:    "\uf00d",     // cross
+			Read:     "\ue28b",     // nf-fae-book_open_o
+			Edit:     "\uee75",     // nf-fa-pen_nib
+			Write:    "\uee75",     // nf-fa-pen_nib (same glyph as Edit)
+			Bash:     "\U000F0BE0", // nf-md-wrench_outline
+			Grep:     "\U000F0968", // nf-md-folder_search
+			Glob:     "\U000F0968", // nf-md-folder_search (same glyph as Grep)
+			Web:      "\U000F059F", // nf-md-web
+			Task:     "\U000F167A", // nf-md-robot_outline
+			Skill:    "\U000F0BE0", // nf-md-wrench_outline
+			Thinking: "\uf0eb",     // nf-fa-lightbulb
+			Other:    "\uf013",     // nf-fa-gear
+			Error:    "\uf00d",     // nf-fa-cross
 		}
 	case "unicode":
 		return Icons{
@@ -103,12 +109,15 @@ func IconsFor(mode string) Icons {
 			Branch:   "⎇",
 			Read:     "📖",
 			Edit:     "✎",
-			Shell:    "⚒",
-			Search:   "🔍",
+			Write:    "✎",
+			Bash:     "⚒",
+			Grep:     "🔍",
+			Glob:     "🔍",
 			Web:      "🌐",
-			Agent:    "🤖",
-			Gear:     "⚙",
+			Task:     "🤖",
+			Skill:    "⚙",
 			Thinking: "🧠",
+			Other:    "⚙",
 			Error:    "✗",
 		}
 	default: // ascii
@@ -120,37 +129,46 @@ func IconsFor(mode string) Icons {
 			Branch:   "#",
 			Read:     "R",
 			Edit:     "E",
-			Shell:    "$",
-			Search:   "?",
+			Write:    "W",
+			Bash:     "$",
+			Grep:     "?",
+			Glob:     "?",
 			Web:      "W",
-			Agent:    "@",
-			Gear:     "*",
+			Task:     "@",
+			Skill:    "*",
 			Thinking: "~",
+			Other:    "*",
 			Error:    "!",
 		}
 	}
 }
 
 // CategoryIcon returns the icon for a tool category.
-// Recognized categories: "file", "shell", "search", "web", "agent", "internal".
-// Unknown categories default to the Gear icon.
+// Each tool category maps to its own icon so Read, Edit, and Write are
+// visually distinct. Unknown categories fall back to Other.
 func CategoryIcon(icons Icons, category string) string {
 	switch category {
-	case "file":
+	case "Read":
 		return icons.Read
-	case "shell":
-		return icons.Shell
-	case "search":
-		return icons.Search
-	case "web":
+	case "Edit":
+		return icons.Edit
+	case "Write":
+		return icons.Write
+	case "Bash":
+		return icons.Bash
+	case "Grep":
+		return icons.Grep
+	case "Glob":
+		return icons.Glob
+	case "Web":
 		return icons.Web
-	case "agent":
-		return icons.Agent
-	case "internal":
-		return icons.Gear
-	case "thinking":
+	case "Task":
+		return icons.Task
+	case "Skill":
+		return icons.Skill
+	case "Thinking":
 		return icons.Thinking
 	default:
-		return icons.Gear
+		return icons.Other
 	}
 }
