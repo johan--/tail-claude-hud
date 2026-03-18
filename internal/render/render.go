@@ -308,10 +308,16 @@ func Render(w io.Writer, ctx *model.RenderContext, cfg *config.Config) {
 
 // applyWidgetStyle converts a WidgetResult to a styled string for plain mode.
 //
-// When ResolvedTheme has an fg override for this widget, PlainText is used as
-// the source (unstyled) and re-rendered with the override color. This avoids
-// double-wrapping: r.Text already has the widget's ANSI codes baked in, so
-// wrapping it again with a different fg produces conflicting escape sequences.
+// When ResolvedTheme has an fg override for this widget AND the widget signals
+// it accepts theme coloring (r.FgColor != ""), PlainText is re-rendered with
+// the override color. This avoids double-wrapping: r.Text already has the
+// widget's ANSI codes baked in, so wrapping it again with a different fg
+// produces conflicting escape sequences.
+//
+// When r.FgColor == "", the widget composes multiple internal styles (e.g.
+// tools with yellow/dim separators, green/red icons). Applying a theme fg
+// override would flatten those per-element ANSI codes into a single color, so
+// r.Text is passed through unchanged regardless of any theme fg override.
 //
 // When no fg override is present the pre-styled r.Text is passed through as-is
 // (widget's own styling is preserved). A bg override, if present, is applied
@@ -329,7 +335,11 @@ func applyWidgetStyle(r widget.WidgetResult, widgetName string, cfg *config.Conf
 		bgOverride = r.BgColor
 	}
 
-	if fgOverride != "" {
+	// When the widget returns FgColor == "", it composes multiple internal
+	// styles (e.g. tools with yellow/dim separators, green/red icons).
+	// Skip the theme fg override to preserve per-element ANSI styling.
+	// Widgets that want theme fg to apply set FgColor to a non-empty value.
+	if fgOverride != "" && r.FgColor != "" {
 		// Re-render from PlainText to avoid double-styling.
 		text := r.PlainText
 		if text == "" {
@@ -342,7 +352,7 @@ func applyWidgetStyle(r widget.WidgetResult, widgetName string, cfg *config.Conf
 		return s.Render(text)
 	}
 
-	// No fg override — use pre-styled Text, optionally with bg.
+	// No fg override (or widget is pre-styled) — use pre-styled Text, optionally with bg.
 	if bgOverride != "" {
 		return lipgloss.NewStyle().Background(lipgloss.Color(bgOverride)).Render(r.Text)
 	}

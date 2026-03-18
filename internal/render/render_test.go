@@ -705,6 +705,26 @@ func TestRender_ExtraOutputAbsentWhenEmpty(t *testing.T) {
 	}
 }
 
+func TestApplyWidgetStyle_SkipsThemeFgWhenWidgetPreStyled(t *testing.T) {
+	// When a widget returns FgColor="" (pre-styled), applyWidgetStyle
+	// must pass r.Text through even when a theme fg override exists.
+	r := widget.WidgetResult{
+		Text:      "\x1b[33m | \x1b[m\x1b[2m | \x1b[m",
+		PlainText: " |  | ",
+		FgColor:   "",
+	}
+
+	cfg := &config.Config{}
+	cfg.ResolvedTheme = theme.Theme{
+		"tools": {Fg: "75", Bg: ""},
+	}
+
+	out := applyWidgetStyle(r, "tools", cfg)
+	if out != r.Text {
+		t.Errorf("expected pre-styled text preserved when FgColor is empty, got %q", out)
+	}
+}
+
 func TestLineMode_Defaults(t *testing.T) {
 	line := config.Line{Widgets: []string{"model"}}
 	if got := lineMode(line, "powerline"); got != "powerline" {
