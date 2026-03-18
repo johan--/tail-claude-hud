@@ -6,6 +6,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
+	"github.com/kylesnowschwartz/tail-claude-hud/internal/color"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/config"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/model"
 )
@@ -20,11 +21,13 @@ var (
 // colorStyle returns a lipgloss.Style using the given color string. If colorName
 // is empty, the fallback style is returned unchanged. This lets callers apply
 // config-driven color overrides without breaking the default palette.
+// Named ANSI colors (e.g. "green", "red", "yellow") are resolved to their
+// numeric equivalents so they render correctly in all terminal modes.
 func colorStyle(colorName string, fallback lipgloss.Style) lipgloss.Style {
 	if colorName == "" {
 		return fallback
 	}
-	return lipgloss.NewStyle().Foreground(lipgloss.Color(colorName))
+	return lipgloss.NewStyle().Foreground(lipgloss.Color(color.ResolveColorName(colorName)))
 }
 
 // contextThresholds returns the color style for the given usage percentage,
@@ -43,19 +46,22 @@ func contextThresholds(pct, warnAt, critAt int, contextColor, warningColor, crit
 
 // thresholdFgColor returns the ANSI color string for threshold-based coloring.
 // Uses config overrides when set, otherwise returns the default green/yellow/red.
+// Config values are passed through resolveColor so named ANSI colors (e.g.
+// "green") are converted to their numeric equivalents before the caller passes
+// them to lipgloss.Color().
 func thresholdFgColor(pct, warnAt, critAt int, cfgContext, cfgWarning, cfgCritical string) string {
 	// Determine the effective color string for each tier.
 	greenFg := "2"
 	if cfgContext != "" {
-		greenFg = cfgContext
+		greenFg = color.ResolveColorName(cfgContext)
 	}
 	yellowFg := "3"
 	if cfgWarning != "" {
-		yellowFg = cfgWarning
+		yellowFg = color.ResolveColorName(cfgWarning)
 	}
 	redFg := "1"
 	if cfgCritical != "" {
-		redFg = cfgCritical
+		redFg = color.ResolveColorName(cfgCritical)
 	}
 
 	switch {

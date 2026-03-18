@@ -63,3 +63,19 @@ func TestCostWidget_RegisteredInRegistry(t *testing.T) {
 		t.Error("Registry missing 'cost' widget")
 	}
 }
+
+// TestCostWidget_NamedColorProducesANSICodes verifies that the default config
+// color "green" (a CSS named color) produces ANSI escape codes in the output.
+// Regression test for: lipgloss.Color("green") returning noColor and stripping
+// all color from cost widget output.
+func TestCostWidget_NamedColorProducesANSICodes(t *testing.T) {
+	ctx := &model.RenderContext{SessionCostUSD: 0.42}
+	cfg := defaultCfg()
+	// The default config uses "green" as the context color, which triggered the bug.
+	cfg.Style.Colors.Context = "green"
+
+	got := Cost(ctx, cfg).Text
+	if !strings.Contains(got, "\x1b[") {
+		t.Errorf("Cost with named color 'green': expected ANSI escape codes in output, got %q", got)
+	}
+}

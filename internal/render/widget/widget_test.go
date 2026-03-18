@@ -214,6 +214,22 @@ func TestContextWidget_BreakdownDisabled(t *testing.T) {
 	}
 }
 
+// TestContextWidget_NamedColorProducesANSICodes verifies that the default config
+// color "green" (a CSS named color) produces ANSI escape codes in the output.
+// Regression test for: lipgloss.Color("green") returning noColor and stripping
+// all color from context widget output.
+func TestContextWidget_NamedColorProducesANSICodes(t *testing.T) {
+	ctx := &model.RenderContext{ContextPercent: 50, ContextWindowSize: 200000}
+	cfg := defaultCfg()
+	// The default config uses "green" as the context color, which triggered the bug.
+	cfg.Style.Colors.Context = "green"
+
+	got := Context(ctx, cfg).Text
+	if !strings.Contains(got, "\x1b[") {
+		t.Errorf("Context with named color 'green': expected ANSI escape codes in output, got %q", got)
+	}
+}
+
 // -- renderBar ----------------------------------------------------------------
 
 func TestRenderBar_ZeroPercent(t *testing.T) {

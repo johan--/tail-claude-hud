@@ -9,6 +9,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/kylesnowschwartz/tail-claude-hud/internal/color"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/config"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/logging"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/model"
@@ -47,11 +48,11 @@ const (
 //  3. theme.DefaultPowerlineBg (last-resort fallback, xterm-256 color 236)
 func resolveSegmentBg(r widget.WidgetResult, widgetName string, cfg *config.Config) string {
 	if r.BgColor != "" {
-		return r.BgColor
+		return color.ResolveColorName(r.BgColor)
 	}
 	if cfg.ResolvedTheme != nil {
 		if colors, ok := cfg.ResolvedTheme[widgetName]; ok && colors.Bg != "" {
-			return colors.Bg
+			return color.ResolveColorName(colors.Bg)
 		}
 	}
 	return theme.DefaultPowerlineBg
@@ -63,11 +64,11 @@ func resolveSegmentBg(r widget.WidgetResult, widgetName string, cfg *config.Conf
 //  3. "" (no explicit fg; let lipgloss use terminal default)
 func resolveSegmentFg(r widget.WidgetResult, widgetName string, cfg *config.Config) string {
 	if r.FgColor != "" {
-		return r.FgColor
+		return color.ResolveColorName(r.FgColor)
 	}
 	if cfg.ResolvedTheme != nil {
 		if colors, ok := cfg.ResolvedTheme[widgetName]; ok && colors.Fg != "" {
-			return colors.Fg
+			return color.ResolveColorName(colors.Fg)
 		}
 	}
 	return ""
@@ -170,9 +171,9 @@ func renderMinimal(results []widget.WidgetResult, line config.Line, cfg *config.
 		// to pre-styled Text when PlainText is not available.
 		var text string
 		if r.PlainText != "" && r.FgColor != "" {
-			text = lipgloss.NewStyle().Foreground(lipgloss.Color(r.FgColor)).Render(r.PlainText)
+			text = lipgloss.NewStyle().Foreground(lipgloss.Color(color.ResolveColorName(r.FgColor))).Render(r.PlainText)
 		} else if r.FgColor != "" {
-			text = lipgloss.NewStyle().Foreground(lipgloss.Color(r.FgColor)).Render(r.Text)
+			text = lipgloss.NewStyle().Foreground(lipgloss.Color(color.ResolveColorName(r.FgColor))).Render(r.Text)
 		} else {
 			text = r.Text
 		}

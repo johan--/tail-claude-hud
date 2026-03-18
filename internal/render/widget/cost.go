@@ -3,6 +3,7 @@ package widget
 import (
 	"fmt"
 
+	"github.com/kylesnowschwartz/tail-claude-hud/internal/color"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/config"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/model"
 )
@@ -45,19 +46,21 @@ func Cost(ctx *model.RenderContext, cfg *config.Config) WidgetResult {
 	plain := fmt.Sprintf("$%.2f", cost)
 
 	// Determine fg color for powerline/minimal modes.
+	// Named ANSI colors (e.g. "green") are resolved to numeric strings so
+	// the renderer can pass them to lipgloss.Color() without losing the color.
 	fgColor := "2" // green default
 	if cfgCtx := cfg.Style.Colors.Context; cfgCtx != "" {
-		fgColor = cfgCtx
+		fgColor = color.ResolveColorName(cfgCtx)
 	}
 	if cost >= critAt {
 		fgColor = "1"
 		if cfgCrit := cfg.Style.Colors.Critical; cfgCrit != "" {
-			fgColor = cfgCrit
+			fgColor = color.ResolveColorName(cfgCrit)
 		}
 	} else if cost >= warnAt {
 		fgColor = "3"
 		if cfgWarn := cfg.Style.Colors.Warning; cfgWarn != "" {
-			fgColor = cfgWarn
+			fgColor = color.ResolveColorName(cfgWarn)
 		}
 	}
 
