@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/config"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/model"
@@ -250,9 +251,10 @@ func TestRender_ReplacesSpacesWithNBSP(t *testing.T) {
 	}
 }
 
-// TestRender_PlainModeOutputIdentical verifies that the env widget pre-styles
-// its Text and the plain mode renderer passes it through as-is (FgColor is
-// used by powerline/minimal modes, not plain).
+// TestRender_PlainModeOutputIdentical verifies that when a theme fg override
+// exists, plain mode re-renders from PlainText with the override color.
+// The default built-in theme assigns fg "135" to the env widget, so the
+// pre-styled MutedStyle text is replaced with PlainText rendered in fg 135.
 func TestRender_PlainModeOutputIdentical(t *testing.T) {
 	ctx := &model.RenderContext{
 		EnvCounts: &model.EnvCounts{MCPServers: 3, Hooks: 2},
@@ -267,15 +269,15 @@ func TestRender_PlainModeOutputIdentical(t *testing.T) {
 
 	rendered := strings.TrimRight(buf.String(), "\n")
 
-	// The Env widget pre-styles Text with MutedStyle and sets FgColor="8"
-	// for powerline/minimal. Plain mode uses pre-styled Text as-is.
-	styled := widget.MutedStyle.Render("3M 2H")
+	// Default theme has env fg = "135". Plain mode now re-renders PlainText
+	// ("3M 2H") with that fg override instead of passing through MutedStyle.
+	styled := lipgloss.NewStyle().Foreground(lipgloss.Color("135")).Render("3M 2H")
 	want := strings.ReplaceAll("\x1b[0m"+styled+"\x1b[0m\x1b[K", " ", "\u00a0")
 	if rendered != want {
 		t.Errorf("plain mode output mismatch: got %q, want %q", rendered, want)
 	}
 
-	// Cross-check: verify the WidgetResult fields.
+	// Cross-check: verify the WidgetResult fields are still correct.
 	result := widget.Registry["env"](ctx, cfg)
 	if result.FgColor != "8" {
 		t.Errorf("Env FgColor: expected '8', got %q", result.FgColor)
@@ -283,8 +285,9 @@ func TestRender_PlainModeOutputIdentical(t *testing.T) {
 	if result.PlainText != "3M 2H" {
 		t.Errorf("Env PlainText: expected '3M 2H', got %q", result.PlainText)
 	}
-	if result.Text != styled {
-		t.Errorf("Env Text: expected pre-styled %q, got %q", styled, result.Text)
+	mutedStyled := widget.MutedStyle.Render("3M 2H")
+	if result.Text != mutedStyled {
+		t.Errorf("Env Text: expected pre-styled %q, got %q", mutedStyled, result.Text)
 	}
 }
 
@@ -675,5 +678,160 @@ func TestLineMode_FallbackToPlain(t *testing.T) {
 	line := config.Line{Widgets: []string{"model"}}
 	if got := lineMode(line, ""); got != "plain" {
 		t.Errorf("expected fallback to 'plain', got %q", got)
+	}
+}
+
+// --- Theme override tests ---
+
+// TestApplyWidgetStyle_FgOverride verifies that when ResolvedTheme has an fg
+// override, applyWidgetStyle re-renders from PlainText with the override color
+// instead of using the pre-styled Text (which already has baked-in ANSI codes).
+func TestApplyWidgetStyle_FgOverride(t *testing.T) {
+	r := widget.WidgetResult{
+		Text:      "\x1b[38;5;94msome model\x1b[0m", // pre-styled
+		PlainText: "some model",
+		FgColor:   "94",
+	}
+	cfg := config.LoadHud()
+	cfg.ResolvedTheme = theme.Theme{
+		"model": {Fg: "#ff8800"},
+	}
+
+	out := applyWidgetStyle(r, "model", cfg)
+
+	// Must contain the 24-bit RGB color parameters for #ff8800 (r=255 g=136 b=0).
+	// Lipgloss may combine fg+bg params in one SGR sequence, so check for the
+	// color parameters rather than a standalone escape.
+	if !strings.Contains(out, "38;2;255;136;0") {
+		t.Errorf("expected override fg escape in output, got %q", out)
+	}
+	// Must contain the plain text.
+	if !strings.Contains(out, "some model") {
+		t.Errorf("expected 'some model' in output, got %q", out)
+	}
+	// Must NOT double-wrap the original fg=94 escape alongside the override.
+	if strings.Contains(out, "\x1b[38;5;94m") {
+		t.Errorf("expected original fg=94 to be absent when override is set, got %q", out)
+	}
+}
+
+// TestApplyWidgetStyle_NoOverride verifies that without a theme override,
+// applyWidgetStyle passes pre-styled Text through unchanged.
+func TestApplyWidgetStyle_NoOverride(t *testing.T) {
+	preStyled := "\x1b[38;5;94msome model\x1b[0m"
+	r := widget.WidgetResult{
+		Text:    preStyled,
+		FgColor: "94",
+	}
+	cfg := config.LoadHud()
+	cfg.ResolvedTheme = theme.Theme{} // no override
+
+	out := applyWidgetStyle(r, "model", cfg)
+
+	if out != preStyled {
+		t.Errorf("expected pre-styled text unchanged, got %q", out)
+	}
+}
+
+// TestApplyWidgetStyle_BgOverrideOnly verifies that a bg-only theme override
+// applies the background while keeping the pre-styled Text intact.
+func TestApplyWidgetStyle_BgOverrideOnly(t *testing.T) {
+	preStyled := "\x1b[38;5;94msome model\x1b[0m"
+	r := widget.WidgetResult{
+		Text:    preStyled,
+		FgColor: "94",
+	}
+	cfg := config.LoadHud()
+	cfg.ResolvedTheme = theme.Theme{
+		"model": {Bg: "236"},
+	}
+
+	out := applyWidgetStyle(r, "model", cfg)
+
+	// Bg=236 must be applied (xterm-256 bg escape sequence).
+	if !strings.Contains(out, "\x1b[48;5;236m") {
+		t.Errorf("expected bg=236 in output, got %q", out)
+	}
+}
+
+// TestResolveSegmentFg_ThemeOverridesWidget verifies that when the theme has an
+// fg override for a widget, it wins over the widget's own FgColor default.
+func TestResolveSegmentFg_ThemeOverridesWidget(t *testing.T) {
+	r := widget.WidgetResult{FgColor: "94"} // model widget default
+	cfg := config.LoadHud()
+	cfg.ResolvedTheme = theme.Theme{
+		"model": {Fg: "#ff8800"},
+	}
+
+	got := resolveSegmentFg(r, "model", cfg)
+	if got != "#ff8800" {
+		t.Errorf("expected theme override '#ff8800', got %q", got)
+	}
+}
+
+// TestResolveSegmentFg_FallsBackToWidgetFg verifies that without a theme
+// override, resolveSegmentFg returns the widget's own FgColor.
+func TestResolveSegmentFg_FallsBackToWidgetFg(t *testing.T) {
+	r := widget.WidgetResult{FgColor: "94"}
+	cfg := config.LoadHud()
+	cfg.ResolvedTheme = theme.Theme{} // no override
+
+	got := resolveSegmentFg(r, "model", cfg)
+	if got != "94" {
+		t.Errorf("expected widget fg '94', got %q", got)
+	}
+}
+
+// TestRender_PlainModeThemeFgOverride verifies end-to-end that a theme fg
+// override applies in plain mode via Render, producing the override color escape.
+func TestRender_PlainModeThemeFgOverride(t *testing.T) {
+	ctx := &model.RenderContext{ModelDisplayName: "Sonnet"}
+	cfg := config.LoadHud()
+	cfg.Style.Mode = "plain"
+	cfg.Lines = []config.Line{
+		{Widgets: []string{"model"}},
+	}
+	cfg.ResolvedTheme = theme.Theme{
+		"model": {Fg: "#ff8800"},
+	}
+
+	var buf bytes.Buffer
+	Render(&buf, ctx, cfg)
+
+	out := buf.String()
+	// 24-bit RGB color parameters for #ff8800 (r=255, g=136, b=0).
+	if !strings.Contains(out, "38;2;255;136;0") {
+		t.Errorf("expected override fg #ff8800 in plain mode output, got %q", out)
+	}
+	if !strings.Contains(out, "Sonnet") {
+		t.Errorf("expected 'Sonnet' in plain mode output, got %q", out)
+	}
+}
+
+// TestRender_PowerlineThemeFgOverride verifies end-to-end that a theme fg
+// override wins over the widget's FgColor in powerline mode.
+func TestRender_PowerlineThemeFgOverride(t *testing.T) {
+	ctx := &model.RenderContext{ModelDisplayName: "Sonnet"}
+	cfg := config.LoadHud()
+	cfg.Style.Mode = "powerline"
+	cfg.Lines = []config.Line{
+		{Widgets: []string{"model"}},
+	}
+	cfg.ResolvedTheme = theme.Theme{
+		"model": {Fg: "#ff8800"},
+	}
+
+	var buf bytes.Buffer
+	Render(&buf, ctx, cfg)
+
+	out := buf.String()
+	// 24-bit RGB color parameters for #ff8800 must appear in powerline output.
+	// Lipgloss may combine fg+bg params in one SGR sequence, so check for the
+	// color parameters rather than a standalone escape.
+	if !strings.Contains(out, "38;2;255;136;0") {
+		t.Errorf("expected override fg #ff8800 in powerline output, got %q", out)
+	}
+	if !strings.Contains(out, "Sonnet") {
+		t.Errorf("expected 'Sonnet' in powerline output, got %q", out)
 	}
 }

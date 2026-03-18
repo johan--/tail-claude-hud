@@ -59,17 +59,21 @@ func resolveSegmentBg(r widget.WidgetResult, widgetName string, cfg *config.Conf
 }
 
 // resolveSegmentFg returns the effective foreground color for a widget segment:
-//  1. r.FgColor (widget-level explicit fg)
-//  2. cfg.ResolvedTheme[widgetName].Fg (theme fg)
+//  1. cfg.ResolvedTheme[widgetName].Fg (user theme override — highest priority)
+//  2. r.FgColor (widget-level explicit fg default)
 //  3. "" (no explicit fg; let lipgloss use terminal default)
+//
+// Theme overrides take priority over widget defaults so that user config is
+// never silently blocked by a widget's built-in FgColor.
 func resolveSegmentFg(r widget.WidgetResult, widgetName string, cfg *config.Config) string {
-	if r.FgColor != "" {
-		return color.ResolveColorName(r.FgColor)
-	}
+	// Theme overrides take priority — user intent beats widget defaults.
 	if cfg.ResolvedTheme != nil {
 		if colors, ok := cfg.ResolvedTheme[widgetName]; ok && colors.Fg != "" {
 			return color.ResolveColorName(colors.Fg)
 		}
+	}
+	if r.FgColor != "" {
+		return color.ResolveColorName(r.FgColor)
 	}
 	return ""
 }
@@ -245,11 +249,11 @@ func Render(w io.Writer, ctx *model.RenderContext, cfg *config.Config) {
 		default: // "plain" or any unknown value
 			// Plain mode: apply widget styles and join with separator.
 			var parts []string
-			for _, r := range results {
+			for i, r := range results {
 				if r.IsEmpty() {
 					continue
 				}
-				parts = append(parts, applyWidgetStyle(r))
+				parts = append(parts, applyWidgetStyle(r, names[i], cfg))
 			}
 			if len(parts) == 0 {
 				continue
@@ -280,15 +284,43 @@ func Render(w io.Writer, ctx *model.RenderContext, cfg *config.Config) {
 
 // applyWidgetStyle converts a WidgetResult to a styled string for plain mode.
 //
-// In plain mode, Text is always pre-styled by the widget with internal ANSI
-// codes (lipgloss renders). FgColor exists for powerline/minimal modes and is
-// not applied here — doing so would double-wrap the already-styled text.
+// When ResolvedTheme has an fg override for this widget, PlainText is used as
+// the source (unstyled) and re-rendered with the override color. This avoids
+// double-wrapping: r.Text already has the widget's ANSI codes baked in, so
+// wrapping it again with a different fg produces conflicting escape sequences.
 //
-// The only exception is BgColor: when explicitly set on the WidgetResult, a
-// background is applied around the pre-styled text.
-func applyWidgetStyle(r widget.WidgetResult) string {
-	if r.BgColor != "" {
-		return lipgloss.NewStyle().Background(lipgloss.Color(r.BgColor)).Render(r.Text)
+// When no fg override is present the pre-styled r.Text is passed through as-is
+// (widget's own styling is preserved). A bg override, if present, is applied
+// around whichever text was selected.
+func applyWidgetStyle(r widget.WidgetResult, widgetName string, cfg *config.Config) string {
+	var fgOverride, bgOverride string
+	if cfg.ResolvedTheme != nil {
+		if colors, ok := cfg.ResolvedTheme[widgetName]; ok {
+			fgOverride = colors.Fg
+			bgOverride = colors.Bg
+		}
+	}
+	// Fall back to widget-level bg when no theme bg override.
+	if bgOverride == "" {
+		bgOverride = r.BgColor
+	}
+
+	if fgOverride != "" {
+		// Re-render from PlainText to avoid double-styling.
+		text := r.PlainText
+		if text == "" {
+			text = r.Text // fallback if PlainText not set
+		}
+		s := lipgloss.NewStyle().Foreground(lipgloss.Color(fgOverride))
+		if bgOverride != "" {
+			s = s.Background(lipgloss.Color(bgOverride))
+		}
+		return s.Render(text)
+	}
+
+	// No fg override — use pre-styled Text, optionally with bg.
+	if bgOverride != "" {
+		return lipgloss.NewStyle().Background(lipgloss.Color(bgOverride)).Render(r.Text)
 	}
 	return r.Text
 }
