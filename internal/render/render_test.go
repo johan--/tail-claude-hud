@@ -270,7 +270,7 @@ func TestRender_PlainModeOutputIdentical(t *testing.T) {
 	// The renderer passes the pre-styled Text through as-is (with ansiReset prefix
 	// and spaces converted to NBSP).
 	styled := widget.MutedStyle.Render("3M 2H")
-	want := strings.ReplaceAll("\x1b[0m"+styled+"\x1b[0m", " ", "\u00a0")
+	want := strings.ReplaceAll("\x1b[0m"+styled+"\x1b[0m\x1b[K", " ", "\u00a0")
 	if rendered != want {
 		t.Errorf("plain mode output mismatch: got %q, want %q", rendered, want)
 	}

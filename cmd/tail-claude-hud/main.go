@@ -10,7 +10,10 @@ import (
 	"syscall"
 	"time"
 
+	"image/color"
+
 	"charm.land/lipgloss/v2"
+	"github.com/lucasb-eyer/go-colorful"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/config"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/gather"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/model"
@@ -318,37 +321,72 @@ const bgCacheTTL = 5 * time.Second
 // detectLightBackground returns true if the terminal has a light background.
 // Results are cached to disk so the expensive /dev/tty query only runs once
 // per TTL period, avoiding OSC 11 race conditions when invoked every ~300ms.
+//
+// When the terminal query fails (common under piped I/O), the cached value is
+// preserved rather than defaulting to dark. This prevents flip-flopping between
+// light and dark when queries intermittently timeout.
 func detectLightBackground() bool {
+	cachedLight := false
+	hasCached := false
+
 	// Read cache first.
 	if data, err := os.ReadFile(bgCacheFile); err == nil {
+		cachedLight = strings.TrimSpace(string(data)) == "light"
+		hasCached = true
+
 		if info, err := os.Stat(bgCacheFile); err == nil {
 			if time.Since(info.ModTime()) < bgCacheTTL {
-				return strings.TrimSpace(string(data)) == "light"
+				return cachedLight
 			}
 		}
 	}
 
-	// Cache miss or stale — detect and cache.
-	light := queryLightBackground()
+	// Cache miss or stale — detect via BackgroundColor which exposes errors.
+	// On failure, preserve the cached value instead of defaulting to dark.
+	light, ok := queryLightBackground()
+	if !ok {
+		return cachedLight || !hasCached
+	}
+
 	mode := "dark"
 	if light {
 		mode = "light"
 	}
-	// Best-effort write; if it fails, we'll just re-detect next time.
 	_ = os.MkdirAll(filepath.Dir(bgCacheFile), 0o755)
 	_ = os.WriteFile(bgCacheFile, []byte(mode+"\n"), 0o644)
 	return light
 }
 
-// queryLightBackground does the actual terminal query via /dev/tty or stderr.
-func queryLightBackground() bool {
+// queryLightBackground queries the terminal background via /dev/tty.
+// Returns (isLight, ok). When ok is false the query failed and the caller
+// should fall back to the cached value rather than assuming dark.
+func queryLightBackground() (light bool, ok bool) {
 	// Try /dev/tty first — works even when all stdio fds are pipes.
 	if tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0); err == nil {
 		defer tty.Close()
-		return !lipgloss.HasDarkBackground(tty, tty)
+		bg, err := lipgloss.BackgroundColor(tty, tty)
+		if err != nil || bg == nil {
+			return false, false
+		}
+		return isLightColor(bg), true
 	}
-	// Fall back to stderr (works when running from a shell directly).
-	return !lipgloss.HasDarkBackground(os.Stdin, os.Stderr)
+	// Fall back to stderr.
+	bg, err := lipgloss.BackgroundColor(os.Stdin, os.Stderr)
+	if err != nil || bg == nil {
+		return false, false
+	}
+	return isLightColor(bg), true
+}
+
+// isLightColor returns true when a color's HSL lightness is >= 0.5.
+// Mirrors lipgloss's unexported isDarkColor with the inverse condition.
+func isLightColor(c color.Color) bool {
+	col, ok := colorful.MakeColor(c)
+	if !ok {
+		return false // can't determine — assume dark (safe default)
+	}
+	_, _, l := col.Hsl()
+	return l >= 0.5
 }
 
 // hasPowerlineLines returns true if any configured line uses powerline mode.
