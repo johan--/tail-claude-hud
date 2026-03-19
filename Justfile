@@ -94,20 +94,24 @@ release notes="":
         exit 1
     fi
 
-    git commit -m "chore: Bump version to $v"
-    git tag "$v"
+    tag="v$v"
+
+    git commit -m "chore: bump version to $v"
+    git tag "$tag"
     git push && git push --tags
 
     # Create GitHub release
     notes="{{notes}}"
     if [[ -n "$notes" && -f "$notes" ]]; then
-        gh release create "$v" --title "$v" --notes-file "$notes" --latest
+        gh release create "$tag" --title "$tag" --notes-file "$notes" --latest
     else
-        gh release create "$v" --title "$v" --generate-notes --latest
+        gh release create "$tag" --title "$tag" --generate-notes --latest
     fi
 
-    # Prime the Go module proxy so `go install ...@latest` resolves immediately
-    GOPROXY=https://proxy.golang.org go list -m "github.com/kylesnowschwartz/tail-claude-hud@$v" || true
-    GOPROXY=https://proxy.golang.org go list -m "github.com/kylesnowschwartz/tail-claude-hud@latest" || true
+    # Prime the Go module proxy so `go install ...@latest` resolves immediately.
+    # Uses the /lookup endpoint which only needs the tag to exist on GitHub —
+    # no local auth required.
+    curl -sf "https://proxy.golang.org/github.com/kylesnowschwartz/tail-claude-hud/@v/${tag}.info" > /dev/null || true
+    curl -sf "https://proxy.golang.org/github.com/kylesnowschwartz/tail-claude-hud/@latest" > /dev/null || true
 
-    echo "Released $v"
+    echo "Released $tag"
