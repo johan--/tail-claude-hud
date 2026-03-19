@@ -134,16 +134,20 @@ func recencyTier(t model.ToolEntry) int {
 	}
 }
 
+// toolLabel joins a category icon and tool name with a space so the icon
+// has room to render at full cell size. Change the separator here to adjust
+// the spacing between icon and name across all tool entries.
+func toolLabel(icon, name string) string {
+	return icon + " " + name
+}
+
 // renderToolEntryPlain formats a single tool entry as unstyled text.
 func renderToolEntryPlain(icons Icons, t model.ToolEntry) string {
-	catIcon := CategoryIcon(icons, t.Category)
+	label := toolLabel(CategoryIcon(icons, t.Category), t.Name)
 	if !t.Completed {
-		return catIcon + t.Name
+		return label
 	}
-	if t.HasError {
-		return catIcon + t.Name + " " + formatDuration(t.DurationMs)
-	}
-	return catIcon + t.Name + " " + formatDuration(t.DurationMs)
+	return label + " " + formatDuration(t.DurationMs)
 }
 
 // renderToolEntry formats a single tool entry according to its state and recency.
@@ -159,13 +163,13 @@ func renderToolEntry(icons Icons, t model.ToolEntry) string {
 
 	if !t.Completed {
 		if t.Category == "Thinking" {
-			return fmt.Sprintf("%s%s", yellowStyle.Render(catIcon), dimStyle.Render(t.Name))
+			return fmt.Sprintf("%s %s", yellowStyle.Render(catIcon), dimStyle.Render(t.Name))
 		}
-		return yellowStyle.Bold(true).Render(catIcon + t.Name)
+		return yellowStyle.Bold(true).Render(toolLabel(catIcon, t.Name))
 	}
 
 	if t.HasError {
-		label := redStyle.Render(catIcon + t.Name)
+		label := redStyle.Render(toolLabel(catIcon, t.Name))
 		dur := redStyle.Render(formatDuration(t.DurationMs))
 		return fmt.Sprintf("%s %s", label, dur)
 	}
@@ -177,15 +181,15 @@ func renderToolEntry(icons Icons, t model.ToolEntry) string {
 	case 1: // fresh (<5s): green icon + secondary (default fg) name
 		icon := greenStyle.Render(catIcon)
 		name := SecondaryStyle.Render(t.Name)
-		return fmt.Sprintf("%s%s %s", icon, name, dur)
+		return fmt.Sprintf("%s %s %s", icon, name, dur)
 	case 3: // faded (>30s): dim icon + dim name
 		icon := dimStyle.Render(catIcon)
 		name := dimStyle.Render(t.Name)
-		return fmt.Sprintf("%s%s %s", icon, name, dur)
+		return fmt.Sprintf("%s %s %s", icon, name, dur)
 	default: // tier 2 / recent: green icon + dim name
 		icon := greenStyle.Render(catIcon)
 		name := dimStyle.Render(t.Name)
-		return fmt.Sprintf("%s%s %s", icon, name, dur)
+		return fmt.Sprintf("%s %s %s", icon, name, dur)
 	}
 }
 
