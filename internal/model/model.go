@@ -44,6 +44,11 @@ type RenderContext struct {
 	// Empty when no extra command is configured or the command fails/times out.
 	ExtraOutput string
 
+	// PermissionWaiting is true when another Claude Code session appears to be
+	// blocked waiting for user permission approval. Detected by scanning the
+	// kernel process table and tailing other sessions' transcripts.
+	PermissionWaiting bool
+
 	// Pointer fields — all may be nil when the corresponding data is unavailable.
 	Transcript *TranscriptData
 	EnvCounts  *EnvCounts

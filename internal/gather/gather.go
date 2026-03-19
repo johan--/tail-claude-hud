@@ -18,6 +18,7 @@ import (
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/extracmd"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/git"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/model"
+	"github.com/kylesnowschwartz/tail-claude-hud/internal/sessions"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/transcript"
 )
 
@@ -106,6 +107,16 @@ func Gather(input *model.StdinData, cfg *config.Config) *model.RenderContext {
 		go func() {
 			defer wg.Done()
 			ctx.ExtraOutput = extracmd.Run(cfg.Extra.Command)
+		}()
+	}
+
+	// Permission detection goroutine: scans for other Claude sessions
+	// waiting on permission approval. Only runs when the widget is active.
+	if active["permission"] {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ctx.PermissionWaiting = sessions.AnyWaitingForPermission(input.TranscriptPath)
 		}()
 	}
 
