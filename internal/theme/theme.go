@@ -45,11 +45,11 @@ var defaultTheme = Theme{
 	"project":   {Fg: "75", Bg: ""}, // blue
 	"env":       {Fg: "135", Bg: ""},
 	"duration":  {Fg: "244", Bg: ""},
-	"tools":    {Fg: "75", Bg: ""},
-	"agents":   {Fg: "114", Bg: ""},
-	"todos":    {Fg: "220", Bg: ""},
-	"session":  {Fg: "87", Bg: ""},
-	"thinking": {Fg: "220", Bg: ""},
+	"tools":     {Fg: "75", Bg: ""},
+	"agents":    {Fg: "114", Bg: ""},
+	"todos":     {Fg: "220", Bg: ""},
+	"session":   {Fg: "87", Bg: ""},
+	"thinking":  {Fg: "220", Bg: ""},
 	"cost":      {Fg: "87", Bg: ""},
 }
 
