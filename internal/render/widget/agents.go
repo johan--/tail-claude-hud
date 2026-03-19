@@ -32,10 +32,9 @@ func Agents(ctx *model.RenderContext, cfg *config.Config) WidgetResult {
 	for _, a := range agents {
 		if a.Status == "running" {
 			running = append(running, a)
-		} else if a.DurationMs >= 1000 {
-			// Only show completed agents that ran for >= 1s.
-			// Sub-second agents are noise — they completed before
-			// the user could notice them.
+		} else if a.DurationMs >= 1000 && !isStaleAgent(a) {
+			// Only show completed agents that ran for >= 1s and finished
+			// within the last 60s. Older agents are no longer actionable.
 			completed = append(completed, a)
 		}
 	}
@@ -118,6 +117,21 @@ func truncateAgentEntries(styled, plain []string, maxWidth int) ([]string, []str
 	// Fallback: not even one entry fits. Return just the first entry without
 	// a count indicator so the render stage can truncate it further.
 	return styled[:1], plain[:1]
+}
+
+// agentStaleThreshold is how long after completion before an agent entry
+// is considered stale and hidden from the statusline.
+const agentStaleThreshold = 60 * time.Second
+
+// isStaleAgent reports whether a completed agent finished more than
+// agentStaleThreshold ago. Returns false for running agents or agents
+// without timing data.
+func isStaleAgent(a model.AgentEntry) bool {
+	if a.StartTime.IsZero() || a.DurationMs == 0 {
+		return false
+	}
+	completedAt := a.StartTime.Add(time.Duration(a.DurationMs) * time.Millisecond)
+	return time.Since(completedAt) > agentStaleThreshold
 }
 
 // maxAgentNameWidth is the character budget for the name/description portion

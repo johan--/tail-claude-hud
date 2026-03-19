@@ -929,7 +929,7 @@ func TestTodosWidget_EmptyTodosReturnsEmpty(t *testing.T) {
 	}
 }
 
-func TestTodosWidget_AllDoneShowsGreenCheck(t *testing.T) {
+func TestTodosWidget_AllDoneHides(t *testing.T) {
 	ctx := &model.RenderContext{Transcript: &model.TranscriptData{
 		Todos: []model.TodoItem{
 			{ID: "1", Content: "First", Done: true},
@@ -939,13 +939,9 @@ func TestTodosWidget_AllDoneShowsGreenCheck(t *testing.T) {
 	cfg := defaultCfg()
 	cfg.Style.Icons = "ascii"
 
-	got := Todos(ctx, cfg).Text
-	icons := IconsFor("ascii")
-	if !strings.Contains(got, icons.Check) {
-		t.Errorf("Todos all done: expected check icon %q, got %q", icons.Check, got)
-	}
-	if !strings.Contains(got, "2/2") {
-		t.Errorf("Todos all done: expected '2/2', got %q", got)
+	got := Todos(ctx, cfg)
+	if got.Text != "" {
+		t.Errorf("Todos all done: expected empty widget, got %q", got.Text)
 	}
 }
 
