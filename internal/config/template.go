@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+
+	"github.com/kylesnowschwartz/tail-claude-hud/internal/setup"
 )
 
 // DefaultTemplate is the default config.toml content written by --init.
@@ -160,6 +163,7 @@ cost_critical = 10.00
 # [theme.overrides]
 
 # Permission widget — shows when another Claude session is waiting for approval.
+# Requires hooks registered via 'tail-claude-hud --init'.
 [permission]
 # Show the project name of the waiting session next to the icon.
 # When false, only the icon is shown.
@@ -184,8 +188,11 @@ cache_ttl_seconds = 180
 # command = "my-custom-command"
 `
 
-// Init writes the default config template to ~/.config/tail-claude-hud/config.toml.
-// It returns an error if the file already exists or if the write fails.
+// Init writes the default config template and registers Claude Code hooks.
+//
+// The config file is only written when it doesn't already exist, but hook
+// registration runs unconditionally so that re-running --init can add hooks
+// to an existing installation.
 func Init() error {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -195,17 +202,26 @@ func Init() error {
 	target := filepath.Join(home, ".config", "tail-claude-hud", "config.toml")
 
 	if _, err := os.Stat(target); err == nil {
-		return fmt.Errorf("config already exists at %s", target)
+		fmt.Printf("Config already exists at %s\n", target)
+	} else {
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return fmt.Errorf("create config directory: %w", err)
+		}
+		if err := os.WriteFile(target, []byte(DefaultTemplate), 0o644); err != nil {
+			return fmt.Errorf("write config file: %w", err)
+		}
+		fmt.Printf("Created config at %s\n", target)
 	}
 
-	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-		return fmt.Errorf("create config directory: %w", err)
+	// Register Claude Code hooks for permission detection.
+	added, err := setup.RegisterHooks()
+	if err != nil {
+		fmt.Printf("Warning: could not register hooks: %v\n", err)
+	} else if len(added) > 0 {
+		fmt.Printf("Registered hooks in ~/.claude/settings.json: %s\n", strings.Join(added, ", "))
+	} else {
+		fmt.Println("Hooks already registered in ~/.claude/settings.json")
 	}
 
-	if err := os.WriteFile(target, []byte(DefaultTemplate), 0o644); err != nil {
-		return fmt.Errorf("write config file: %w", err)
-	}
-
-	fmt.Printf("Created config at %s\n", target)
 	return nil
 }

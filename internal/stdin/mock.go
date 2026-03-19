@@ -23,6 +23,7 @@ func MockStdinData(transcriptPath string) *model.StdinData {
 	usedPct := float64(68) // (116000+12000+8000) / 200000 * 100 = 68
 
 	return &model.StdinData{
+		SessionID:      "mock-preview-session",
 		TranscriptPath: transcriptPath,
 		Cwd:            cwd,
 		Model: &struct {

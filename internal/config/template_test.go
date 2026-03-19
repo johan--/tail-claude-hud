@@ -60,10 +60,9 @@ func TestInitCreatesFile(t *testing.T) {
 	}
 }
 
-// TestInitErrorsWhenFileExists verifies Init returns an error when the config
-// file is already present.
-func TestInitErrorsWhenFileExists(t *testing.T) {
-	// Write the template to a temp home, then call Init expecting an error.
+// TestInitSkipsConfigWhenExists verifies Init does not overwrite an existing
+// config file but still succeeds (hook registration proceeds).
+func TestInitSkipsConfigWhenExists(t *testing.T) {
 	tmpHome := t.TempDir()
 	target := filepath.Join(tmpHome, ".config", "tail-claude-hud", "config.toml")
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
@@ -75,12 +74,17 @@ func TestInitErrorsWhenFileExists(t *testing.T) {
 
 	t.Setenv("HOME", tmpHome)
 
-	err := Init()
-	if err == nil {
-		t.Fatal("expected error when config already exists, got nil")
+	if err := Init(); err != nil {
+		t.Fatalf("Init() returned unexpected error: %v", err)
 	}
-	if !strings.Contains(err.Error(), "config already exists") {
-		t.Errorf("unexpected error message: %v", err)
+
+	// Config should not be overwritten.
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	if string(data) != "existing" {
+		t.Error("Init() overwrote existing config file")
 	}
 }
 

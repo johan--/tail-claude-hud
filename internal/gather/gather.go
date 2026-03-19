@@ -14,11 +14,11 @@ import (
 	"time"
 
 	"github.com/charmbracelet/x/term"
+	"github.com/kylesnowschwartz/tail-claude-hud/internal/breadcrumb"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/config"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/extracmd"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/git"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/model"
-	"github.com/kylesnowschwartz/tail-claude-hud/internal/sessions"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/transcript"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/usage"
 )
@@ -121,14 +121,14 @@ func Gather(input *model.StdinData, cfg *config.Config) *model.RenderContext {
 		}()
 	}
 
-	// Permission detection goroutine: scans for other Claude sessions
-	// waiting on permission approval. Only runs when the widget is active.
+	// Permission detection goroutine: scans breadcrumb files written by
+	// Claude Code hooks. Only runs when the widget is active.
 	if active["permission"] {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if ws := sessions.FindWaitingSession(input.TranscriptPath); ws != nil {
-				ctx.PermissionProject = ws.Project
+			if b := breadcrumb.FindWaiting(input.SessionID); b != nil {
+				ctx.PermissionProject = b.Project
 			}
 		}()
 	}

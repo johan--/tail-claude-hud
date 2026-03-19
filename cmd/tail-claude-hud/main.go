@@ -16,6 +16,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/config"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/gather"
+	"github.com/kylesnowschwartz/tail-claude-hud/internal/hook"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/model"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/preset"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/render"
@@ -24,6 +25,24 @@ import (
 )
 
 func main() {
+	// Hook subcommand: "tail-claude-hud hook <event>"
+	// Dispatched before flag.Parse() so hooks don't interfere with flags.
+	// Always exits 0 — a hook failure must not block Claude Code.
+	if len(os.Args) >= 3 && os.Args[1] == "hook" {
+		var err error
+		switch os.Args[2] {
+		case "permission-request":
+			err = hook.HandlePermissionRequest(os.Stdin)
+		case "cleanup":
+			err = hook.HandleCleanup(os.Stdin)
+		}
+		if err != nil {
+			// Log to debug file if available, but never fail.
+			_ = err
+		}
+		return
+	}
+
 	dumpCurrent := flag.Bool("dump-current", false, "render the statusline from a transcript file instead of stdin")
 	dumpRaw := flag.Bool("dump-raw", false, "like --dump-current but print ANSI escape sequences as visible text for debugging")
 	initConfig := flag.Bool("init", false, "generate a default config file at ~/.config/tail-claude-hud/config.toml")

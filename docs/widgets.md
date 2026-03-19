@@ -41,7 +41,7 @@ Gathered from the filesystem:
 | `git` | Branch, dirty indicator, ahead/behind counts | `dirty` (bool), `ahead_behind` (bool), `file_stats` (bool) |
 | `project` | Composite of directory + git in a single segment | inherits `[directory]` and `[git]` config |
 | `env` | MCP servers, CLAUDE.md files, rule files, hooks (e.g. "3M 2C 4R 3H") | -- |
-| `permission` | Red alert when another session needs approval | `show_project` (bool, default: true) |
+| `permission` | Red alert when another session needs approval (requires hooks via `--init`) | `show_project` (bool, default: true) |
 | `usage` | Anthropic 5-hour and 7-day rate-limit utilization | `five_hour_threshold` (int, default: 0), `seven_day_threshold` (int, default: 80), `cache_ttl_seconds` (int, default: 180) |
 
 ## Config sections

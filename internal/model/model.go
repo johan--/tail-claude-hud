@@ -194,6 +194,7 @@ type OutputStyle struct {
 // StdinData is the raw decoded form of the JSON blob Claude Code pipes to stdin.
 // It is produced by the stdin package and then transformed into RenderContext fields.
 type StdinData struct {
+	SessionID      string `json:"session_id"`
 	TranscriptPath string `json:"transcript_path"`
 	Cwd            string `json:"cwd"`
 	Model          *struct {

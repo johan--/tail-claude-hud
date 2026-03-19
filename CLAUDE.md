@@ -54,6 +54,8 @@ stdin → gather → render → stdout
 
 **Conditional goroutines**: The gather stage checks which widgets are configured before spawning work. If no transcript widgets are active, no transcript parsing runs.
 
+**Hook-based permission detection**: The binary doubles as a Claude Code hook handler via `tail-claude-hud hook <event>`. The `PermissionRequest` hook writes a breadcrumb file to `~/.config/tail-claude-hud/waiting/{session_id}`; `PostToolUse` and `Stop` hooks remove it. The statusline gather stage scans this directory (skipping its own session) to detect other sessions blocked on permission approval. Breadcrumbs older than 120s are ignored (covers hard crashes). This replaced a cgo-based process table scanner, enabling `CGO_ENABLED=0` builds.
+
 ## Transcript Processing (Three Layers)
 
 The transcript package has three distinct responsibilities:
