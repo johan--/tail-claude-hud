@@ -505,6 +505,7 @@ func (es *ExtractionState) ToTranscriptData() *model.TranscriptData {
 			HasError:   t.hasError,
 			Category:   t.category,
 			Target:     t.target,
+			StartTime:  t.startTime,
 		})
 	}
 

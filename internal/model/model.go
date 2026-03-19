@@ -101,16 +101,17 @@ type TranscriptData struct {
 // ToolEntry records a single tool invocation observed in the transcript.
 type ToolEntry struct {
 	Name       string
-	Completed  bool   // false = still running, true = completed or error
-	DurationMs int    // 0 = still running or unknown
-	HasError   bool   // true when the tool_result had is_error set
-	Category   string // file, shell, search, web, agent, internal
-	Target     string // file path, command, pattern, or other contextual string
+	Completed  bool      // false = still running, true = completed or error
+	DurationMs int       // 0 = still running or unknown
+	HasError   bool      // true when the tool_result had is_error set
+	Category   string    // file, shell, search, web, agent, internal
+	Target     string    // file path, command, pattern, or other contextual string
+	StartTime  time.Time // when the tool_use was first observed in the transcript
 }
 
 // AgentEntry records a sub-agent task observed in the transcript.
 type AgentEntry struct {
-	ID          string    // hex UUID from the agent filename or tool_use block ID
+	ID          string // hex UUID from the agent filename or tool_use block ID
 	Name        string
 	Status      string
 	Model       string    // e.g. "claude-haiku-4-5"

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/model"
 )
@@ -77,7 +78,7 @@ func TestFormatDuration_RenderedInCompletedTool(t *testing.T) {
 	}
 }
 
-// Spec 1: 3 running + 4 completed → newest 5 shown in chronological (insertion) order.
+// Spec 1: 3 running + 4 completed -> newest 5 shown in chronological (insertion) order.
 //
 // The Tools slice is oldest-first. The widget reverses the full list to get
 // newest-first, then caps at maxVisibleTools=5. Running tools are not pinned;
@@ -138,18 +139,18 @@ func TestTools_NewestFirstChronological(t *testing.T) {
 	}
 }
 
-// Spec 2: 6 completed tools → only 5 shown, oldest dropped.
+// Spec 2: 6 completed tools -> only 5 shown, oldest dropped.
 //
 // displayTools is oldest-first; the widget reverses completed tools to get
 // newest-first, then caps at 5.  The oldest (C1) must not appear.
 func TestTools_SixCompleted_OldestDropped(t *testing.T) {
 	tools := []model.ToolEntry{
-		{Name: "C1", Completed: true, DurationMs: 100, Category: "Other"}, // oldest — should be dropped
+		{Name: "C1", Completed: true, DurationMs: 100, Category: "Other"}, // oldest -- should be dropped
 		{Name: "C2", Completed: true, DurationMs: 200, Category: "Other"},
 		{Name: "C3", Completed: true, DurationMs: 300, Category: "Other"},
 		{Name: "C4", Completed: true, DurationMs: 400, Category: "Other"},
 		{Name: "C5", Completed: true, DurationMs: 500, Category: "Other"},
-		{Name: "C6", Completed: true, DurationMs: 600, Category: "Other"}, // newest — should appear first
+		{Name: "C6", Completed: true, DurationMs: 600, Category: "Other"}, // newest -- should appear first
 	}
 	ctx := toolsCtx(tools)
 	cfg := defaultCfg()
@@ -305,13 +306,13 @@ func TestTools_MaxVisibleToolsCap(t *testing.T) {
 
 // Spec 5 recommendation (see TestTools_MaxToolsBufferSizeRecommendation below).
 
-// Spec 4: maxTools=20 buffer fills then prunes → display still shows correct last 5.
+// Spec 4: maxTools=20 buffer fills then prunes -> display still shows correct last 5.
 //
 // ExtractionState caps displayTools at 20, pruning the oldest from the front.
 // Once 25 tools have been added, tools 1-5 are pruned; tools 6-25 remain.
 // This test simulates the result: a Tools slice of 20 entries (oldest-first),
 // representing the surviving window after pruning.
-// The widget must still show the 5 newest (T21–T25 mapped to T16–T20 in the
+// The widget must still show the 5 newest (T21-T25 mapped to T16-T20 in the
 // surviving slice, i.e. the last 5 of the 20 remaining).
 func TestTools_MaxToolsBufferFillsAndPrunes(t *testing.T) {
 	// Simulate what ExtractionState produces after 25 tool completions:
@@ -339,7 +340,7 @@ func TestTools_MaxToolsBufferFillsAndPrunes(t *testing.T) {
 		t.Errorf("expected 4 separators (5 entries), got %d in %q", separators, got)
 	}
 
-	// The 5 newest (T21–T25) must be present.
+	// The 5 newest (T21-T25) must be present.
 	for _, name := range []string{"T21", "T22", "T23", "T24", "T25"} {
 		if !strings.Contains(got, name) {
 			t.Errorf("expected recent tool %q in output, got %q", name, got)
@@ -404,7 +405,7 @@ func TestTools_DividerHighlight(t *testing.T) {
 		// 3 tools = 2 separators (positions 0 and 1).
 		// Visible newest-first: C sep0 B sep1 A
 
-		// offset=0 → highlight position 0 (between C and B)
+		// offset=0 -> highlight position 0 (between C and B)
 		got0 := Tools(toolsCtxWithOffset(tools, 0), cfg).Text
 		hlIdx0 := strings.Index(got0, highlightSep)
 		bIdx0 := strings.Index(got0, "B")
@@ -412,7 +413,7 @@ func TestTools_DividerHighlight(t *testing.T) {
 			t.Errorf("offset=0: highlight should be before B, got %q", got0)
 		}
 
-		// offset=1 → highlight position 1 (between B and A)
+		// offset=1 -> highlight position 1 (between B and A)
 		got1 := Tools(toolsCtxWithOffset(tools, 1), cfg).Text
 		hlIdx1 := strings.Index(got1, highlightSep)
 		aIdx1 := strings.Index(got1, "A")
@@ -420,7 +421,7 @@ func TestTools_DividerHighlight(t *testing.T) {
 			t.Errorf("offset=1: highlight should be before A, got %q", got1)
 		}
 
-		// offset=2 → wraps to position 0 again
+		// offset=2 -> wraps to position 0 again
 		got2 := Tools(toolsCtxWithOffset(tools, 2), cfg).Text
 		hlIdx2 := strings.Index(got2, highlightSep)
 		bIdx2 := strings.Index(got2, "B")
@@ -431,7 +432,7 @@ func TestTools_DividerHighlight(t *testing.T) {
 
 	t.Run("highlight advances with each new tool", func(t *testing.T) {
 		// Simulates successive tool_use events incrementing DividerOffset.
-		// 4 tools = 3 separator positions. Offset 3→6 should cycle through
+		// 4 tools = 3 separator positions. Offset 3->6 should cycle through
 		// positions 0, 1, 2, 0, 1, 2...
 		tools := []model.ToolEntry{
 			{Name: "T1", Completed: true, DurationMs: 100, Category: "Other"},
@@ -475,13 +476,214 @@ func TestTools_MaxToolsBufferSizeRecommendation(t *testing.T) {
 	// the correct last 5 after the buffer has pruned older entries.
 	//
 	// If someone reduces maxTools to 5 this test still passes (the widget only
-	// ever sees 5 entries), but the more important property — that a burst of
-	// completions doesn't drop the newest entries before rendering — can only
+	// ever sees 5 entries), but the more important property -- that a burst of
+	// completions doesn't drop the newest entries before rendering -- can only
 	// be verified through ExtractionState integration tests, not here.
 	const maxToolsBuf = 20 // from extractor.go
 	const maxVisible = 5   // from tools.go
 
 	if maxToolsBuf < maxVisible {
 		t.Errorf("maxTools buffer (%d) must be >= maxVisibleTools (%d)", maxToolsBuf, maxVisible)
+	}
+}
+
+// --- Recency tier tests ---
+
+func TestRecencyTier_Running(t *testing.T) {
+	entry := model.ToolEntry{Name: "Read", Completed: false, Category: "Read"}
+	if tier := recencyTier(entry); tier != 0 {
+		t.Errorf("running tool should be tier 0, got %d", tier)
+	}
+}
+
+func TestRecencyTier_Fresh(t *testing.T) {
+	// Completed 1 second ago.
+	entry := model.ToolEntry{
+		Name:       "Read",
+		Completed:  true,
+		DurationMs: 500,
+		Category:   "Read",
+		StartTime:  time.Now().Add(-1500 * time.Millisecond), // started 1.5s ago, took 0.5s -> completed 1s ago
+	}
+	if tier := recencyTier(entry); tier != 1 {
+		t.Errorf("tool completed 1s ago should be tier 1 (fresh), got %d", tier)
+	}
+}
+
+func TestRecencyTier_Recent(t *testing.T) {
+	// Completed 10 seconds ago.
+	entry := model.ToolEntry{
+		Name:       "Read",
+		Completed:  true,
+		DurationMs: 500,
+		Category:   "Read",
+		StartTime:  time.Now().Add(-10500 * time.Millisecond), // started 10.5s ago, took 0.5s -> completed 10s ago
+	}
+	if tier := recencyTier(entry); tier != 2 {
+		t.Errorf("tool completed 10s ago should be tier 2 (recent), got %d", tier)
+	}
+}
+
+func TestRecencyTier_Faded(t *testing.T) {
+	// Completed 60 seconds ago.
+	entry := model.ToolEntry{
+		Name:       "Read",
+		Completed:  true,
+		DurationMs: 500,
+		Category:   "Read",
+		StartTime:  time.Now().Add(-60500 * time.Millisecond), // started 60.5s ago, took 0.5s -> completed 60s ago
+	}
+	if tier := recencyTier(entry); tier != 3 {
+		t.Errorf("tool completed 60s ago should be tier 3 (faded), got %d", tier)
+	}
+}
+
+func TestRecencyTier_ZeroStartTime(t *testing.T) {
+	// Missing timestamp falls back to tier 2 (recent).
+	entry := model.ToolEntry{
+		Name:       "Read",
+		Completed:  true,
+		DurationMs: 500,
+		Category:   "Read",
+		// StartTime is zero
+	}
+	if tier := recencyTier(entry); tier != 2 {
+		t.Errorf("zero-start-time tool should be tier 2 (recent fallback), got %d", tier)
+	}
+}
+
+// --- Tool target tests ---
+
+func TestShortenPath(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"/Users/kyle/Code/proj/internal/widget/tools.go", "widget/tools.go"},
+		{"/single.go", "single.go"},
+		{"tools.go", "tools.go"},
+		{"/a/b", "a/b"},
+		{"/a/b/c/d/e.go", "d/e.go"},
+	}
+	for _, tt := range tests {
+		got := shortenPath(tt.input)
+		if got != tt.want {
+			t.Errorf("shortenPath(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestTruncateTarget(t *testing.T) {
+	tests := []struct {
+		input    string
+		maxWidth int
+		want     string
+	}{
+		// Empty target stays empty.
+		{"", 25, ""},
+		// Short target unchanged.
+		{"*.go", 25, "*.go"},
+		// File path shortened.
+		{"/Users/kyle/Code/proj/internal/widget/tools.go", 25, "widget/tools.go"},
+		// Long non-path string truncated with ellipsis (24 chars + ellipsis = 25).
+		{"this is a very long pattern that exceeds", 25, "this is a very long patt\u2026"},
+		// Long path shortened then fits.
+		{"/Users/kyle/Code/proj/internal/w/short.go", 25, "w/short.go"},
+	}
+	for _, tt := range tests {
+		got := truncateTarget(tt.input, tt.maxWidth)
+		if got != tt.want {
+			t.Errorf("truncateTarget(%q, %d) = %q, want %q", tt.input, tt.maxWidth, got, tt.want)
+		}
+	}
+}
+
+func TestTools_TargetShownOnRunningTool(t *testing.T) {
+	// When a running tool has a target, it should appear in the output.
+	tools := []model.ToolEntry{
+		{Name: "Grep", Completed: true, DurationMs: 200, Category: "Grep"},
+		{Name: "Bash", Category: "Bash", Target: "go test ./..."},
+	}
+	ctx := toolsCtx(tools)
+	cfg := defaultCfg()
+
+	got := Tools(ctx, cfg).Text
+
+	if !strings.Contains(got, "go test ./...") {
+		t.Errorf("expected running tool target in output, got %q", got)
+	}
+}
+
+func TestTools_TargetShownOnNewestWhenNoRunning(t *testing.T) {
+	// When all tools are completed, the newest (first after reversal) gets the target.
+	tools := []model.ToolEntry{
+		{Name: "Read", Completed: true, DurationMs: 100, Category: "Read", Target: "/old/file.go"},
+		{Name: "Edit", Completed: true, DurationMs: 200, Category: "Edit", Target: "/Users/kyle/Code/proj/internal/widget/tools.go"},
+	}
+	ctx := toolsCtx(tools)
+	cfg := defaultCfg()
+
+	got := Tools(ctx, cfg).Text
+
+	// Edit is newest (reversed to index 0) and should show its shortened target.
+	if !strings.Contains(got, "widget/tools.go") {
+		t.Errorf("expected newest tool's shortened target, got %q", got)
+	}
+	// Read's target should NOT appear (only one entry gets a target).
+	if strings.Contains(got, "old/file.go") {
+		t.Errorf("older tool's target should not appear, got %q", got)
+	}
+}
+
+func TestTools_TargetEmptyRendersCleanly(t *testing.T) {
+	// When the target entry has an empty target, output should render without extra spaces.
+	tools := []model.ToolEntry{
+		{Name: "Read", Completed: true, DurationMs: 100, Category: "Read"},
+	}
+	ctx := toolsCtx(tools)
+	cfg := defaultCfg()
+
+	got := Tools(ctx, cfg).PlainText
+
+	// Should not have double spaces from empty target.
+	if strings.Contains(got, "  ") {
+		t.Errorf("empty target should not produce double spaces, got %q", got)
+	}
+}
+
+func TestTools_RunningToolPreferredForTarget(t *testing.T) {
+	// Even when a running tool is not the newest (after reversal), it gets the target.
+	// Slice: [Running-Bash, Completed-Read]. Reversed: [Completed-Read, Running-Bash].
+	// The running tool (index 1 after reversal) should get the target.
+	tools := []model.ToolEntry{
+		{Name: "Bash", Category: "Bash", Target: "npm install"},                                  // running, oldest
+		{Name: "Read", Completed: true, DurationMs: 100, Category: "Read", Target: "/some/file"}, // completed, newest
+	}
+	ctx := toolsCtx(tools)
+	cfg := defaultCfg()
+
+	got := Tools(ctx, cfg).Text
+
+	if !strings.Contains(got, "npm install") {
+		t.Errorf("running tool's target should be shown, got %q", got)
+	}
+	// The completed tool should NOT show its target.
+	if strings.Contains(got, "some/file") {
+		t.Errorf("completed tool's target should not appear when a running tool exists, got %q", got)
+	}
+}
+
+func TestTools_PlainTextIncludesTarget(t *testing.T) {
+	tools := []model.ToolEntry{
+		{Name: "Read", Completed: true, DurationMs: 300, Category: "Read", Target: "/a/b/c.go"},
+	}
+	ctx := toolsCtx(tools)
+	cfg := defaultCfg()
+
+	got := Tools(ctx, cfg).PlainText
+
+	// PlainText should include the shortened target.
+	if !strings.Contains(got, "b/c.go") {
+		t.Errorf("PlainText should include shortened target, got %q", got)
 	}
 }
