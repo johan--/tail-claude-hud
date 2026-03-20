@@ -54,22 +54,19 @@ type RenderContext struct {
 	EnvCounts  *EnvCounts
 	Git        *GitStatus
 
-	// Usage holds rate-limit utilization data from the Anthropic OAuth API.
-	// Nil when the user is an API user, credentials are unavailable, or the
-	// usage widget is not configured.
+	// Usage holds rate-limit utilization data from stdin.
+	// Nil when rate_limits is absent from stdin (older Claude Code or API users)
+	// or when the usage widget is not configured.
 	Usage *UsageInfo
 }
 
-// UsageInfo holds rate-limit utilization data for rendering and caching.
+// UsageInfo holds rate-limit utilization data from stdin for rendering.
 // FiveHourPercent and SevenDayPercent are -1 when unavailable.
 type UsageInfo struct {
-	PlanName        string    `json:"plan_name"`
 	FiveHourPercent int       `json:"five_hour_percent"` // 0-100, or -1
 	FiveHourResetAt time.Time `json:"five_hour_reset_at"`
 	SevenDayPercent int       `json:"seven_day_percent"` // 0-100, or -1
 	SevenDayResetAt time.Time `json:"seven_day_reset_at"`
-	APIUnavailable  bool      `json:"api_unavailable"`
-	APIError        string    `json:"api_error"` // "rate-limited", "http-NNN", "network", "timeout", ""
 }
 
 // TokenSample records a token count observation at a point in time.

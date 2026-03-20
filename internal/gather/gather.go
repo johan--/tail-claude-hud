@@ -20,7 +20,6 @@ import (
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/git"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/model"
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/transcript"
-	"github.com/kylesnowschwartz/tail-claude-hud/internal/usage"
 )
 
 // transcriptWidgets are the widget names that require transcript data.
@@ -111,17 +110,9 @@ func Gather(input *model.StdinData, cfg *config.Config) *model.RenderContext {
 		}()
 	}
 
-	// Usage: prefer stdin rate_limits (zero-cost, no network) over the OAuth API.
+	// Usage: populated from stdin rate_limits (zero-cost, no network).
 	if active["usage"] {
-		if stdinUsage := usageFromStdin(input); stdinUsage != nil {
-			ctx.Usage = stdinUsage
-		} else {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				ctx.Usage = gatherUsage()
-			}()
-		}
+		ctx.Usage = usageFromStdin(input)
 	}
 
 	// Permission detection goroutine: scans breadcrumb files written by
@@ -511,16 +502,6 @@ func parseStdinTime(epoch *float64) time.Time {
 	sec := int64(*epoch)
 	nsec := int64((*epoch - float64(sec)) * 1e9)
 	return time.Unix(sec, nsec)
-}
-
-// gatherUsage fetches usage data from the Anthropic OAuth API (via cache).
-// Returns nil when credentials are unavailable or the user is an API user.
-func gatherUsage() *model.UsageInfo {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil
-	}
-	return usage.Fetch(home)
 }
 
 // mergeSubagents is a union merge that keeps transcript agents as the base.

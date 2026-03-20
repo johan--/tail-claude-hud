@@ -17,57 +17,9 @@ func TestUsage_NilUsageReturnsEmpty(t *testing.T) {
 	}
 }
 
-func TestUsage_APIUnavailableShowsWarning(t *testing.T) {
-	ctx := &model.RenderContext{
-		Usage: &model.UsageInfo{
-			PlanName:       "Pro",
-			APIUnavailable: true,
-			APIError:       "timeout",
-		},
-	}
-	cfg := defaultCfg()
-
-	got := Usage(ctx, cfg)
-	if got.IsEmpty() {
-		t.Fatal("expected non-empty for API unavailable")
-	}
-	if !strings.Contains(got.PlainText, "Usage") {
-		t.Errorf("expected 'Usage' in output, got %q", got.PlainText)
-	}
-	if !strings.Contains(got.PlainText, "timeout") {
-		t.Errorf("expected 'timeout' hint in output, got %q", got.PlainText)
-	}
-}
-
-func TestUsage_RateLimitedShowsSyncing(t *testing.T) {
-	ctx := &model.RenderContext{
-		Usage: &model.UsageInfo{
-			PlanName:        "Pro",
-			FiveHourPercent: 25,
-			SevenDayPercent: 40,
-			APIError:        "rate-limited",
-		},
-	}
-	cfg := defaultCfg()
-	cfg.Usage.FiveHourThreshold = 0
-
-	got := Usage(ctx, cfg)
-	if got.IsEmpty() {
-		t.Fatal("expected non-empty for rate-limited with data")
-	}
-	if !strings.Contains(got.PlainText, "syncing") {
-		t.Errorf("expected 'syncing' in output, got %q", got.PlainText)
-	}
-	// In nerdfont mode, icon replaces percentage text.
-	if got.PlainText == "" {
-		t.Error("expected non-empty PlainText")
-	}
-}
-
 func TestUsage_LimitReached(t *testing.T) {
 	ctx := &model.RenderContext{
 		Usage: &model.UsageInfo{
-			PlanName:        "Pro",
 			FiveHourPercent: 100,
 			FiveHourResetAt: time.Now().Add(45 * time.Minute),
 		},
@@ -89,7 +41,6 @@ func TestUsage_LimitReached(t *testing.T) {
 func TestUsage_BelowThresholdHides(t *testing.T) {
 	ctx := &model.RenderContext{
 		Usage: &model.UsageInfo{
-			PlanName:        "Pro",
 			FiveHourPercent: 10,
 			SevenDayPercent: 5,
 		},
@@ -105,7 +56,6 @@ func TestUsage_BelowThresholdHides(t *testing.T) {
 func TestUsage_SevenDayShownAboveThreshold(t *testing.T) {
 	ctx := &model.RenderContext{
 		Usage: &model.UsageInfo{
-			PlanName:        "Pro",
 			FiveHourPercent: 30,
 			SevenDayPercent: 85,
 			SevenDayResetAt: time.Now().Add(48 * time.Hour),
@@ -132,7 +82,6 @@ func TestUsage_SevenDayShownAboveThreshold(t *testing.T) {
 func TestUsage_SevenDayHiddenBelowThreshold(t *testing.T) {
 	ctx := &model.RenderContext{
 		Usage: &model.UsageInfo{
-			PlanName:        "Pro",
 			FiveHourPercent: 30,
 			SevenDayPercent: 50,
 		},
@@ -181,23 +130,5 @@ func TestFormatResetTime(t *testing.T) {
 				t.Errorf("formatResetTime(now+%v) = %q, want %q", tt.offset, got, tt.want)
 			}
 		})
-	}
-}
-
-func TestFormatUsageError(t *testing.T) {
-	tests := []struct {
-		input string
-		want  string
-	}{
-		{"", ""},
-		{"rate-limited", "(syncing...)"},
-		{"http-401", "(401)"},
-		{"timeout", "(timeout)"},
-	}
-	for _, tt := range tests {
-		got := formatUsageError(tt.input)
-		if got != tt.want {
-			t.Errorf("formatUsageError(%q) = %q, want %q", tt.input, got, tt.want)
-		}
 	}
 }

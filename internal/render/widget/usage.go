@@ -12,11 +12,10 @@ import (
 	"github.com/kylesnowschwartz/tail-claude-hud/internal/model"
 )
 
-// Usage renders 5-hour and 7-day rate-limit utilization from the Anthropic
-// OAuth API.
+// Usage renders 5-hour and 7-day rate-limit utilization from stdin.
 //
 // Returns empty when:
-//   - ctx.Usage is nil (no credentials, API user, widget not configured)
+//   - ctx.Usage is nil (rate_limits absent from stdin, or widget not configured)
 //   - Both windows are below their configured thresholds
 func Usage(ctx *model.RenderContext, cfg *config.Config) WidgetResult {
 	if ctx.Usage == nil {
@@ -24,11 +23,6 @@ func Usage(ctx *model.RenderContext, cfg *config.Config) WidgetResult {
 	}
 
 	u := ctx.Usage
-
-	// API errors (except rate-limited with stale data) get a warning label.
-	if u.APIUnavailable && u.APIError != "rate-limited" {
-		return usageError(u.APIError)
-	}
 
 	// Limit reached: bold critical with reset countdown.
 	if u.FiveHourPercent >= 100 || u.SevenDayPercent >= 100 {
@@ -53,8 +47,7 @@ func Usage(ctx *model.RenderContext, cfg *config.Config) WidgetResult {
 		return WidgetResult{}
 	}
 
-	// Join windows, append syncing hint, pick highest-severity color.
-	return usageJoin(windows, u.APIError == "rate-limited")
+	return usageJoin(windows)
 }
 
 // ---------------------------------------------------------------------------
@@ -136,18 +129,6 @@ func usageReset(resetAt time.Time) (string, string) {
 // Composite results: error, limit-reached, and multi-window join.
 // ---------------------------------------------------------------------------
 
-// usageError renders the API-unavailable warning state.
-func usageError(apiError string) WidgetResult {
-	hint := formatUsageError(apiError)
-	label := "Usage " + hint
-	style := lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
-	return WidgetResult{
-		Text:      style.Render(label),
-		PlainText: label,
-		FgColor:   "3",
-	}
-}
-
 // usageLimitReached renders bold critical text with a reset countdown.
 func usageLimitReached(u *model.UsageInfo, cfg *config.Config) WidgetResult {
 	critFg := "1"
@@ -175,9 +156,9 @@ func usageLimitReached(u *model.UsageInfo, cfg *config.Config) WidgetResult {
 	}
 }
 
-// usageJoin combines multiple window segments with a separator and appends
-// a syncing hint when rate-limited. Picks the highest-severity foreground color.
-func usageJoin(windows []usageSegment, syncing bool) WidgetResult {
+// usageJoin combines multiple window segments with a separator.
+// Picks the highest-severity foreground color.
+func usageJoin(windows []usageSegment) WidgetResult {
 	styledParts := make([]string, len(windows))
 	plainParts := make([]string, len(windows))
 	fgColor := ""
@@ -192,11 +173,6 @@ func usageJoin(windows []usageSegment, syncing bool) WidgetResult {
 
 	text := strings.Join(styledParts, DimStyle.Render(" | "))
 	plain := strings.Join(plainParts, " | ")
-
-	if syncing {
-		text += " " + DimStyle.Render("(syncing...)")
-		plain += " (syncing...)"
-	}
 
 	return WidgetResult{Text: text, PlainText: plain, FgColor: fgColor}
 }
@@ -267,18 +243,4 @@ func formatResetTime(t time.Time) string {
 		return fmt.Sprintf("%dh %dm", hours, mins)
 	}
 	return fmt.Sprintf("%dh", hours)
-}
-
-// formatUsageError formats an API error string for display.
-func formatUsageError(apiError string) string {
-	if apiError == "" {
-		return ""
-	}
-	if apiError == "rate-limited" {
-		return "(syncing...)"
-	}
-	if strings.HasPrefix(apiError, "http-") {
-		return "(" + apiError[5:] + ")"
-	}
-	return "(" + apiError + ")"
 }
