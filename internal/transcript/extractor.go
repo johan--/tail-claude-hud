@@ -556,7 +556,7 @@ func (es *ExtractionState) processToolResult(b ToolResultBlock, ts time.Time) {
 func (es *ExtractionState) ToTranscriptData() *model.TranscriptData {
 	tools := make([]model.ToolEntry, 0, len(es.displayTools))
 	for _, t := range es.displayTools {
-		tools = append(tools, model.ToolEntry{
+		entry := model.ToolEntry{
 			Name:       t.name,
 			Completed:  t.completed,
 			DurationMs: t.durationMs,
@@ -564,7 +564,18 @@ func (es *ExtractionState) ToTranscriptData() *model.TranscriptData {
 			Category:   t.category,
 			Target:     t.target,
 			StartTime:  t.startTime,
-		})
+		}
+		// If thinking is still "active" at snapshot time, the transcript has
+		// been fully read — there's just no subsequent entry to close it yet.
+		// Mark it completed in the output so the widget renders it as finished
+		// rather than permanently yellow.
+		if t == es.thinkingTool && !t.completed {
+			entry.Completed = true
+			if !t.startTime.IsZero() {
+				entry.DurationMs = int(time.Since(t.startTime).Milliseconds())
+			}
+		}
+		tools = append(tools, entry)
 	}
 
 	agents := make([]model.AgentEntry, 0, len(es.displayAgents))

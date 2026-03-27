@@ -46,22 +46,26 @@ func Tools(ctx *model.RenderContext, cfg *config.Config) WidgetResult {
 		reversed[len(tools)-1-i] = t
 	}
 
-	visible := reversed
-	if len(visible) > maxVisibleTools {
-		visible = visible[:maxVisibleTools]
+	// Group consecutive entries with the same name so that e.g.
+	// "Bash | Bash | Bash" becomes "Bash ×3". Each group counts as
+	// one slot toward maxVisibleTools, letting more unique tool types
+	// remain visible.
+	groups := groupConsecutive(reversed)
+	if len(groups) > maxVisibleTools {
+		groups = groups[:maxVisibleTools]
 	}
 
 	var parts []string
 	var plainParts []string
-	for _, t := range visible {
-		parts = append(parts, renderToolEntry(icons, t))
-		plainParts = append(plainParts, renderToolEntryPlain(icons, t))
+	for _, g := range groups {
+		parts = append(parts, renderToolGroup(icons, g))
+		plainParts = append(plainParts, renderToolGroupPlain(icons, g))
 	}
 
 	// Compute the highlighted separator position using wrapping ticker logic.
-	// DividerOffset is a monotonic counter incremented per tool_use. The
-	// highlighted separator cycles through the visible positions so the user
-	// has a stable visual anchor that advances with each new tool call.
+	// The highlight cycles through separator positions based on the number of
+	// visible groups, so it walks one position per group-boundary change rather
+	// than jumping multiple positions when consecutive tools are grouped.
 	numSeps := len(parts) - 1
 	if numSeps <= 0 {
 		return WidgetResult{
@@ -70,7 +74,7 @@ func Tools(ctx *model.RenderContext, cfg *config.Config) WidgetResult {
 			FgColor:   "",
 		}
 	}
-	highlightIdx := ctx.Transcript.DividerOffset % numSeps
+	highlightIdx := len(groups) % numSeps
 
 	return WidgetResult{
 		Text:      joinWithHighlight(parts, highlightIdx),
@@ -141,16 +145,26 @@ func toolLabel(icon, name string) string {
 	return icon + " " + name
 }
 
-// renderToolEntryPlain formats a single tool entry as unstyled text.
-func renderToolEntryPlain(icons Icons, t model.ToolEntry) string {
+// renderToolEntryPlain formats a tool entry as unstyled text.
+// When count > 1, appends "×N" and omits the duration (ambiguous for groups).
+func renderToolEntryPlain(icons Icons, t model.ToolEntry, count int) string {
 	label := toolLabel(CategoryIcon(icons, t.Category), t.Name)
+	if count > 1 {
+		label += fmt.Sprintf(" ×%d", count)
+		if !t.Completed {
+			return label
+		}
+		return label
+	}
 	if !t.Completed {
 		return label
 	}
 	return label + " " + formatDuration(t.DurationMs)
 }
 
-// renderToolEntry formats a single tool entry according to its state and recency.
+// renderToolEntry formats a tool entry according to its state and recency.
+// When count > 1, appends a "×N" multiplier styled consistently with the name
+// and omits the duration (ambiguous for groups).
 //
 // Styling by tier:
 //   - Tier 0 (running): yellow icon + bold name (unchanged)
@@ -158,39 +172,91 @@ func renderToolEntryPlain(icons Icons, t model.ToolEntry) string {
 //   - Tier 2 (recent, 5-30s): green icon + dim name + dim duration
 //   - Tier 3 (faded, >30s): dim icon + dim name + dim duration
 //   - Error: red icon + name + duration (regardless of age)
-func renderToolEntry(icons Icons, t model.ToolEntry) string {
+func renderToolEntry(icons Icons, t model.ToolEntry, count int) string {
 	catIcon := CategoryIcon(icons, t.Category)
+	mult := ""
+	if count > 1 {
+		mult = fmt.Sprintf(" ×%d", count)
+	}
+	showDuration := count <= 1
 
 	if !t.Completed {
 		if t.Category == "Thinking" {
-			return fmt.Sprintf("%s %s", yellowStyle.Render(catIcon), DimStyle.Render(t.Name))
+			return fmt.Sprintf("%s %s", yellowStyle.Render(catIcon), DimStyle.Render(t.Name+mult))
 		}
-		return yellowStyle.Bold(true).Render(toolLabel(catIcon, t.Name))
+		return yellowStyle.Bold(true).Render(toolLabel(catIcon, t.Name) + mult)
 	}
 
 	if t.HasError {
-		label := redStyle.Render(toolLabel(catIcon, t.Name))
+		label := redStyle.Render(toolLabel(catIcon, t.Name) + mult)
+		if !showDuration {
+			return label
+		}
 		dur := redStyle.Render(formatDuration(t.DurationMs))
 		return fmt.Sprintf("%s %s", label, dur)
 	}
 
 	tier := recencyTier(t)
-	dur := DimStyle.Render(formatDuration(t.DurationMs))
 
 	switch tier {
 	case 1: // fresh (<5s): green icon + secondary (default fg) name
 		icon := greenStyle.Render(catIcon)
-		name := SecondaryStyle.Render(t.Name)
-		return fmt.Sprintf("%s %s %s", icon, name, dur)
+		name := SecondaryStyle.Render(t.Name + mult)
+		if !showDuration {
+			return fmt.Sprintf("%s %s", icon, name)
+		}
+		return fmt.Sprintf("%s %s %s", icon, name, DimStyle.Render(formatDuration(t.DurationMs)))
 	case 3: // faded (>30s): dim icon + dim name
 		icon := DimStyle.Render(catIcon)
-		name := DimStyle.Render(t.Name)
-		return fmt.Sprintf("%s %s %s", icon, name, dur)
+		name := DimStyle.Render(t.Name + mult)
+		if !showDuration {
+			return fmt.Sprintf("%s %s", icon, name)
+		}
+		return fmt.Sprintf("%s %s %s", icon, name, DimStyle.Render(formatDuration(t.DurationMs)))
 	default: // tier 2 / recent: green icon + dim name
 		icon := greenStyle.Render(catIcon)
-		name := DimStyle.Render(t.Name)
-		return fmt.Sprintf("%s %s %s", icon, name, dur)
+		name := DimStyle.Render(t.Name + mult)
+		if !showDuration {
+			return fmt.Sprintf("%s %s", icon, name)
+		}
+		return fmt.Sprintf("%s %s %s", icon, name, DimStyle.Render(formatDuration(t.DurationMs)))
 	}
+}
+
+// toolGroup represents one or more consecutive tool entries with the same name.
+// The representative entry (the first / most recent) is used for styling.
+type toolGroup struct {
+	Entry model.ToolEntry // most recent entry in the group (for styling)
+	Count int             // number of consecutive entries collapsed
+}
+
+// groupConsecutive collapses runs of consecutive entries with the same name
+// into toolGroup values. A single entry becomes a group with Count=1.
+func groupConsecutive(entries []model.ToolEntry) []toolGroup {
+	if len(entries) == 0 {
+		return nil
+	}
+	groups := []toolGroup{{Entry: entries[0], Count: 1}}
+	for _, e := range entries[1:] {
+		last := &groups[len(groups)-1]
+		if e.Name == last.Entry.Name {
+			last.Count++
+		} else {
+			groups = append(groups, toolGroup{Entry: e, Count: 1})
+		}
+	}
+	return groups
+}
+
+// renderToolGroup renders a toolGroup, delegating to renderToolEntry with the
+// group's count. Count=1 renders normally; count>1 appends ×N and hides duration.
+func renderToolGroup(icons Icons, g toolGroup) string {
+	return renderToolEntry(icons, g.Entry, g.Count)
+}
+
+// renderToolGroupPlain renders a toolGroup as unstyled text.
+func renderToolGroupPlain(icons Icons, g toolGroup) string {
+	return renderToolEntryPlain(icons, g.Entry, g.Count)
 }
 
 // formatDuration converts a millisecond duration into a compact human-readable string.

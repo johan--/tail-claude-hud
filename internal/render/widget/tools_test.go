@@ -19,17 +19,6 @@ func toolsCtx(tools []model.ToolEntry) *model.RenderContext {
 	}
 }
 
-// toolsCtxWithOffset builds a RenderContext with both a tools slice and a
-// DividerOffset. The widget highlights separator at position offset % (numVisible - 1).
-func toolsCtxWithOffset(tools []model.ToolEntry, offset int) *model.RenderContext {
-	return &model.RenderContext{
-		Transcript: &model.TranscriptData{
-			Tools:         tools,
-			DividerOffset: offset,
-		},
-	}
-}
-
 // containsInOrder returns true when all want strings appear in output in the
 // given order (each want appears after the previous one).
 func containsInOrder(output string, want []string) bool {
@@ -344,11 +333,11 @@ func TestTools_MaxToolsBufferFillsAndPrunes(t *testing.T) {
 	}
 }
 
-// TestTools_DividerHighlight verifies the scrolling ticker separator behavior.
+// TestTools_DividerHighlight verifies the ticker separator behavior.
 //
-// The highlighted separator cycles through positions based on DividerOffset.
-// With N visible tools there are N-1 separators. The highlighted position is
-// offset % (N-1), wrapping around when it exceeds the last position.
+// The highlighted separator position is determined by the number of visible
+// groups: highlightIdx = len(groups) % numSeps. This is deterministic for a
+// given set of tools (no dependency on DividerOffset).
 func TestTools_DividerHighlight(t *testing.T) {
 	t.Run("single tool has no separator", func(t *testing.T) {
 		tools := []model.ToolEntry{
@@ -364,23 +353,21 @@ func TestTools_DividerHighlight(t *testing.T) {
 		}
 	})
 
-	t.Run("two tools: highlight cycles between sole separator position", func(t *testing.T) {
+	t.Run("two groups: sole separator is always highlighted", func(t *testing.T) {
 		tools := []model.ToolEntry{
 			{Name: "A", Completed: true, DurationMs: 100, Category: "Other"},
 			{Name: "B", Completed: true, DurationMs: 200, Category: "Other"},
 		}
 		cfg := defaultCfg()
 
-		// 2 tools = 1 separator. Any offset mod 1 = 0, so it's always highlighted.
-		for _, offset := range []int{0, 1, 5, 100} {
-			got := Tools(toolsCtxWithOffset(tools, offset), cfg).Text
-			if !strings.Contains(got, highlightSep) {
-				t.Errorf("offset=%d: expected highlighted separator with 2 tools, got %q", offset, got)
-			}
+		// 2 groups, 1 separator. len(groups) % 1 = 0, always highlighted.
+		got := Tools(toolsCtx(tools), cfg).Text
+		if !strings.Contains(got, highlightSep) {
+			t.Errorf("expected highlighted separator with 2 tools, got %q", got)
 		}
 	})
 
-	t.Run("three tools: highlight position wraps", func(t *testing.T) {
+	t.Run("three groups: highlight is deterministic", func(t *testing.T) {
 		tools := []model.ToolEntry{
 			{Name: "A", Completed: true, DurationMs: 100, Category: "Other"},
 			{Name: "B", Completed: true, DurationMs: 200, Category: "Other"},
@@ -388,38 +375,17 @@ func TestTools_DividerHighlight(t *testing.T) {
 		}
 		cfg := defaultCfg()
 
-		// 3 tools = 2 separators (positions 0 and 1).
-		// Visible newest-first: C sep0 B sep1 A
-
-		// offset=0 -> highlight position 0 (between C and B)
-		got0 := Tools(toolsCtxWithOffset(tools, 0), cfg).Text
-		hlIdx0 := strings.Index(got0, highlightSep)
-		bIdx0 := strings.Index(got0, "B")
-		if hlIdx0 < 0 || hlIdx0 > bIdx0 {
-			t.Errorf("offset=0: highlight should be before B, got %q", got0)
-		}
-
-		// offset=1 -> highlight position 1 (between B and A)
-		got1 := Tools(toolsCtxWithOffset(tools, 1), cfg).Text
-		hlIdx1 := strings.Index(got1, highlightSep)
-		aIdx1 := strings.Index(got1, "A")
-		if hlIdx1 < 0 || hlIdx1 > aIdx1 {
-			t.Errorf("offset=1: highlight should be before A, got %q", got1)
-		}
-
-		// offset=2 -> wraps to position 0 again
-		got2 := Tools(toolsCtxWithOffset(tools, 2), cfg).Text
-		hlIdx2 := strings.Index(got2, highlightSep)
-		bIdx2 := strings.Index(got2, "B")
-		if hlIdx2 < 0 || hlIdx2 > bIdx2 {
-			t.Errorf("offset=2: highlight should wrap to before B, got %q", got2)
+		// 3 groups, 2 separators. highlightIdx = 3 % 2 = 1 (between B and A).
+		// Visible newest-first: C sep0 B sep1(hl) A
+		got := Tools(toolsCtx(tools), cfg).Text
+		hlIdx := strings.Index(got, highlightSep)
+		aIdx := strings.Index(got, "A")
+		if hlIdx < 0 || hlIdx > aIdx {
+			t.Errorf("highlight should be before A (position 1), got %q", got)
 		}
 	})
 
-	t.Run("highlight advances with each new tool", func(t *testing.T) {
-		// Simulates successive tool_use events incrementing DividerOffset.
-		// 4 tools = 3 separator positions. Offset 3->6 should cycle through
-		// positions 0, 1, 2, 0, 1, 2...
+	t.Run("exactly one separator is highlighted", func(t *testing.T) {
 		tools := []model.ToolEntry{
 			{Name: "T1", Completed: true, DurationMs: 100, Category: "Other"},
 			{Name: "T2", Completed: true, DurationMs: 200, Category: "Other"},
@@ -428,16 +394,38 @@ func TestTools_DividerHighlight(t *testing.T) {
 		}
 		cfg := defaultCfg()
 
-		for offset := 0; offset < 9; offset++ {
-			got := Tools(toolsCtxWithOffset(tools, offset), cfg).Text
-			if !strings.Contains(got, highlightSep) {
-				t.Errorf("offset=%d: expected a highlighted separator, got %q", offset, got)
-			}
-			// Count: exactly 1 highlighted, rest are dim.
-			hlCount := strings.Count(got, highlightSep)
-			if hlCount != 1 {
-				t.Errorf("offset=%d: expected exactly 1 highlighted separator, got %d in %q", offset, hlCount, got)
-			}
+		got := Tools(toolsCtx(tools), cfg).Text
+		if !strings.Contains(got, highlightSep) {
+			t.Errorf("expected a highlighted separator, got %q", got)
+		}
+		hlCount := strings.Count(got, highlightSep)
+		if hlCount != 1 {
+			t.Errorf("expected exactly 1 highlighted separator, got %d in %q", hlCount, got)
+		}
+	})
+
+	t.Run("grouping shifts highlight position", func(t *testing.T) {
+		// 4 unique tools: 4 groups, 3 seps. highlightIdx = 4 % 3 = 1.
+		// Now add a 5th that groups with the newest: 4 groups still, same highlight.
+		tools4 := []model.ToolEntry{
+			{Name: "A", Completed: true, DurationMs: 100, Category: "Other"},
+			{Name: "B", Completed: true, DurationMs: 200, Category: "Other"},
+			{Name: "C", Completed: true, DurationMs: 300, Category: "Other"},
+			{Name: "D", Completed: true, DurationMs: 400, Category: "Other"},
+		}
+		cfg := defaultCfg()
+		got4 := Tools(toolsCtx(tools4), cfg).Text
+
+		// Add E (unique): 5 groups, 4 seps. highlightIdx = 5 % 4 = 1.
+		tools5 := append(tools4, model.ToolEntry{Name: "E", Completed: true, DurationMs: 500, Category: "Other"})
+		got5 := Tools(toolsCtx(tools5), cfg).Text
+
+		// Both should have exactly 1 highlight.
+		if strings.Count(got4, highlightSep) != 1 {
+			t.Errorf("4 tools: expected 1 highlighted separator, got %q", got4)
+		}
+		if strings.Count(got5, highlightSep) != 1 {
+			t.Errorf("5 tools: expected 1 highlighted separator, got %q", got5)
 		}
 	})
 }
@@ -535,5 +523,89 @@ func TestRecencyTier_ZeroStartTime(t *testing.T) {
 	}
 	if tier := recencyTier(entry); tier != 2 {
 		t.Errorf("zero-start-time tool should be tier 2 (recent fallback), got %d", tier)
+	}
+}
+
+// --- Consecutive grouping tests ---
+
+// TestTools_ConsecutiveGrouping verifies that consecutive tools with the same
+// name are collapsed into "Name ×N" instead of being listed individually.
+func TestTools_ConsecutiveGrouping(t *testing.T) {
+	tools := []model.ToolEntry{
+		{Name: "Bash", Completed: true, DurationMs: 100, Category: "Bash"},
+		{Name: "Bash", Completed: true, DurationMs: 200, Category: "Bash"},
+		{Name: "Edit", Completed: true, DurationMs: 50, Category: "Edit"},
+		{Name: "Bash", Completed: true, DurationMs: 300, Category: "Bash"},
+		{Name: "Bash", Completed: true, DurationMs: 400, Category: "Bash"},
+		{Name: "Bash", Completed: true, DurationMs: 500, Category: "Bash"},
+	}
+	ctx := toolsCtx(tools)
+	cfg := defaultCfg()
+
+	got := Tools(ctx, cfg).PlainText
+
+	// After reversal (newest-first): Bash, Bash, Bash, Edit, Bash, Bash
+	// Groups: [Bash ×3] [Edit] [Bash ×2]
+	if !strings.Contains(got, "×3") {
+		t.Errorf("expected ×3 for 3 consecutive Bash, got %q", got)
+	}
+	if !strings.Contains(got, "×2") {
+		t.Errorf("expected ×2 for 2 consecutive Bash, got %q", got)
+	}
+	// Should have 3 groups = 2 separators
+	separators := strings.Count(got, " | ")
+	if separators != 2 {
+		t.Errorf("expected 2 separators (3 groups), got %d in %q", separators, got)
+	}
+}
+
+// TestTools_SingleEntriesNotGrouped verifies that non-consecutive same-name
+// tools are NOT grouped (only consecutive runs are collapsed).
+func TestTools_SingleEntriesNotGrouped(t *testing.T) {
+	tools := []model.ToolEntry{
+		{Name: "Bash", Completed: true, DurationMs: 100, Category: "Bash"},
+		{Name: "Edit", Completed: true, DurationMs: 200, Category: "Edit"},
+		{Name: "Bash", Completed: true, DurationMs: 300, Category: "Bash"},
+	}
+	ctx := toolsCtx(tools)
+	cfg := defaultCfg()
+
+	got := Tools(ctx, cfg).PlainText
+
+	// After reversal: Bash, Edit, Bash — no consecutive duplicates
+	if strings.Contains(got, "×") {
+		t.Errorf("non-consecutive same-name tools should not be grouped, got %q", got)
+	}
+}
+
+// TestTools_GroupingReducesSlotCount verifies that grouping allows more unique
+// tool types to be visible within maxVisibleTools.
+func TestTools_GroupingReducesSlotCount(t *testing.T) {
+	// 8 tools: 5 Bash then Read, Grep, Edit (oldest-first)
+	// Without grouping, only 5 would show (all Bash from newest end).
+	// With grouping, reversed = Edit, Grep, Read, Bash×5 → 4 groups, all visible.
+	tools := []model.ToolEntry{
+		{Name: "Bash", Completed: true, DurationMs: 100, Category: "Bash"},
+		{Name: "Bash", Completed: true, DurationMs: 100, Category: "Bash"},
+		{Name: "Bash", Completed: true, DurationMs: 100, Category: "Bash"},
+		{Name: "Bash", Completed: true, DurationMs: 100, Category: "Bash"},
+		{Name: "Bash", Completed: true, DurationMs: 100, Category: "Bash"},
+		{Name: "Read", Completed: true, DurationMs: 200, Category: "Read"},
+		{Name: "Grep", Completed: true, DurationMs: 150, Category: "Grep"},
+		{Name: "Edit", Completed: true, DurationMs: 50, Category: "Edit"},
+	}
+	ctx := toolsCtx(tools)
+	cfg := defaultCfg()
+
+	got := Tools(ctx, cfg).PlainText
+
+	// All 4 unique groups should be visible.
+	for _, name := range []string{"Edit", "Grep", "Read", "Bash"} {
+		if !strings.Contains(got, name) {
+			t.Errorf("expected %q to be visible after grouping, got %q", name, got)
+		}
+	}
+	if !strings.Contains(got, "×5") {
+		t.Errorf("expected ×5 for 5 consecutive Bash, got %q", got)
 	}
 }

@@ -33,7 +33,7 @@ func TestDefaultsWhenNoFile(t *testing.T) {
 	if len(cfg.Lines) != 3 {
 		t.Fatalf("expected 3 lines, got %d", len(cfg.Lines))
 	}
-	assertWidgets(t, cfg.Lines[0].Widgets, []string{"model", "context", "project", "todos", "duration", "permission"})
+	assertWidgets(t, cfg.Lines[0].Widgets, []string{"model", "context", "project", "worktree", "todos", "duration", "permission"})
 	assertWidgets(t, cfg.Lines[1].Widgets, []string{"agents"})
 	assertWidgets(t, cfg.Lines[2].Widgets, []string{"tools"})
 
@@ -273,7 +273,7 @@ func TestDefaultsNeverReturnsNil(t *testing.T) {
 }
 
 // TestDefaultLayoutIsThreeLines verifies the layout from config.DefaultLines:
-// Line 1 = identity+health, Line 2 = tools (ephemeral), Line 3 = agents (ephemeral).
+// Line 1 = identity+health+worktree, Line 2 = agents (ephemeral), Line 3 = tools (ephemeral).
 func TestDefaultLayoutIsThreeLines(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
@@ -287,7 +287,7 @@ func TestDefaultLayoutIsThreeLines(t *testing.T) {
 		t.Fatalf("default layout: want 3 lines, got %d", len(cfg.Lines))
 	}
 
-	assertWidgets(t, cfg.Lines[0].Widgets, []string{"model", "context", "project", "todos", "duration", "permission"})
+	assertWidgets(t, cfg.Lines[0].Widgets, []string{"model", "context", "project", "worktree", "todos", "duration", "permission"})
 	assertWidgets(t, cfg.Lines[1].Widgets, []string{"agents"})
 	assertWidgets(t, cfg.Lines[2].Widgets, []string{"tools"})
 }
