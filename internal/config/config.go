@@ -120,6 +120,7 @@ func DefaultLines() []Line {
 	return []Line{
 		{Widgets: []string{"model", "context", "project", "worktree", "todos", "duration", "permission"}},
 		{Widgets: []string{"agents"}},
+		{Widgets: []string{"tools"}},
 	}
 }
 
