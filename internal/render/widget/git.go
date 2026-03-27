@@ -30,7 +30,7 @@ func Git(ctx *model.RenderContext, cfg *config.Config) WidgetResult {
 	var plainParts []string
 
 	// Branch icon + name in cyan.
-	branchStr := fmt.Sprintf("%s%s", icons.Branch, g.Branch)
+	branchStr := fmt.Sprintf("%s %s", icons.Branch, g.Branch)
 	parts = append(parts, gitBranchStyle.Render(branchStr))
 	plainParts = append(plainParts, branchStr)
 
