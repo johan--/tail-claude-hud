@@ -2552,9 +2552,11 @@ func TestTokenSamples_PersistedThroughSnapshot(t *testing.T) {
 
 // ---- Thinking as ToolEntry (specs: thinking emitted as tool entry) ----
 
-// TestThinking_EmitsToolEntry_Running verifies that a thinking-only entry adds
-// a ToolEntry with Name="Thinking", Category="Thinking", Completed=false.
-func TestThinking_EmitsToolEntry_Running(t *testing.T) {
+// TestThinking_EmitsToolEntry_CompletedAtSnapshot verifies that a thinking-only
+// entry adds a ToolEntry with Name="Thinking", Category="Thinking", and that
+// ToTranscriptData marks it Completed=true (since the transcript has been fully
+// read and there is no subsequent entry to close it).
+func TestThinking_EmitsToolEntry_CompletedAtSnapshot(t *testing.T) {
 	es := NewExtractionState()
 	es.ProcessEntry(makeThinkingEntry())
 
@@ -2569,8 +2571,8 @@ func TestThinking_EmitsToolEntry_Running(t *testing.T) {
 	if tool.Category != "Thinking" {
 		t.Errorf("expected Category=Thinking, got %q", tool.Category)
 	}
-	if tool.Completed {
-		t.Error("expected Completed=false (thinking still in progress), got true")
+	if !tool.Completed {
+		t.Error("expected Completed=true at snapshot time (no subsequent entry to close it), got false")
 	}
 }
 
